@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 #include "common/ida_helpers.hpp"
 
-#define DONT_DEFINE_HEXRAYS 1
 #include <ida.hpp>
 #include <idp.hpp>
 #include <loader.hpp>
@@ -15,6 +14,7 @@
 #include <lines.hpp>
 #include <strlist.hpp>
 #include <ua.hpp>
+#include <hexrays.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -667,6 +667,385 @@ inline nlohmann::json get_func_ranges(const nlohmann::json& args) {
     result["ranges"] = ranges;
     result["count"] = ranges.size();
 
+    return result;
+}
+
+// ===== Decompilation Tools (Hex-Rays) =====
+
+inline nlohmann::json decompile_function(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int flags = args.value("flags", 0);
+
+    // Get function at address
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function found at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+    }
+
+    // Check if decompiler is available
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available or failed to initialize");
+    }
+
+    // Decompile the function
+    hexrays_failure_t hf;
+    cfuncptr_t cfunc = decompile_func(pfn, &hf, flags);
+
+    if (!cfunc) {
+        std::string error_msg = "Decompilation failed";
+        if (hf.str.length() > 0) {
+            error_msg += ": " + std::string(hf.str.c_str());
+        }
+        error_msg += " (error code: " + std::to_string(hf.code) + ")";
+        throw std::runtime_error(error_msg);
+    }
+
+    // Get pseudocode as string
+    qstring pseudocode;
+    cfunc->get_pseudocode();
+
+    // Build the pseudocode text
+    qstring func_text;
+
+    // Print function prototype
+    cfunc->print_dcl(&func_text);
+    func_text.append("\n");
+
+    // Print function body using strvec
+    const strvec_t& sv = cfunc->get_pseudocode();
+    for (size_t i = 0; i < sv.size(); i++) {
+        func_text.append(sv[i].line.c_str());
+        func_text.append("\n");
+    }
+
+    // Get local variables
+    nlohmann::json lvars = nlohmann::json::array();
+    lvars_t* vars = cfunc->get_lvars();
+    if (vars) {
+        for (size_t i = 0; i < vars->size(); i++) {
+            const lvar_t& var = (*vars)[i];
+
+            qstring var_type_str;
+            var.type().print(&var_type_str);
+
+            nlohmann::json lvar;
+            lvar["name"] = var.name.c_str();
+            lvar["type"] = var_type_str.c_str();
+            lvar["width"] = var.width;
+            lvar["is_arg"] = var.is_arg_var();
+            lvar["is_result"] = var.is_result_var();
+
+            lvars.push_back(lvar);
+        }
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["pseudocode"] = func_text.c_str();
+    result["maturity"] = cfunc->maturity;
+    result["lvars"] = lvars;
+
+    return result;
+}
+
+inline nlohmann::json decompile_snippet(const nlohmann::json& args) {
+    if (!args.contains("start_address")) {
+        throw std::invalid_argument("Missing required parameter: start_address");
+    }
+
+    ea_t start_ea = args["start_address"];
+    ea_t end_ea = args.value("end_address", start_ea + 0x100);
+    int flags = args.value("flags", 0);
+
+    // Check if decompiler is available
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available or failed to initialize");
+    }
+
+    // Create range
+    rangevec_t ranges;
+    ranges.push_back(range_t(start_ea, end_ea));
+
+    // Decompile the snippet
+    hexrays_failure_t hf;
+    cfuncptr_t cfunc = ::decompile_snippet(ranges, &hf, flags);
+
+    if (!cfunc) {
+        std::string error_msg = "Decompilation failed";
+        if (hf.str.length() > 0) {
+            error_msg += ": " + std::string(hf.str.c_str());
+        }
+        throw std::runtime_error(error_msg);
+    }
+
+    // Get pseudocode
+    qstring func_text;
+    cfunc->print_dcl(&func_text);
+    func_text.append("\n");
+
+    const strvec_t& sv = cfunc->get_pseudocode();
+    for (size_t i = 0; i < sv.size(); i++) {
+        func_text.append(sv[i].line.c_str());
+        func_text.append("\n");
+    }
+
+    nlohmann::json result;
+    result["start_address"] = static_cast<uint64_t>(start_ea);
+    result["end_address"] = static_cast<uint64_t>(end_ea);
+    result["pseudocode"] = func_text.c_str();
+
+    return result;
+}
+
+inline nlohmann::json generate_microcode(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    std::string maturity_str = args.value("maturity", "MMAT_GLBOPT");
+
+    // Get function
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function found at address");
+    }
+
+    // Check if decompiler is available
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available");
+    }
+
+    // Map maturity string to enum
+    mba_maturity_t maturity = MMAT_GLBOPT3;
+    if (maturity_str == "MMAT_GENERATED") maturity = MMAT_GENERATED;
+    else if (maturity_str == "MMAT_PREOPTIMIZED") maturity = MMAT_PREOPTIMIZED;
+    else if (maturity_str == "MMAT_LOCOPT") maturity = MMAT_LOCOPT;
+    else if (maturity_str == "MMAT_CALLS") maturity = MMAT_CALLS;
+    else if (maturity_str == "MMAT_GLBOPT1") maturity = MMAT_GLBOPT1;
+    else if (maturity_str == "MMAT_GLBOPT2") maturity = MMAT_GLBOPT2;
+    else if (maturity_str == "MMAT_GLBOPT3") maturity = MMAT_GLBOPT3;
+
+    // Generate microcode
+    mba_ranges_t mbr(pfn);
+    hexrays_failure_t hf;
+    mba_t* mba = ::gen_microcode(mbr, &hf, nullptr, 0, maturity);
+
+    if (!mba) {
+        std::string error_msg = "Microcode generation failed";
+        if (hf.str.length() > 0) {
+            error_msg += ": " + std::string(hf.str.c_str());
+        }
+        throw std::runtime_error(error_msg);
+    }
+
+    // Build microcode text using vd_printer_t
+    qstring microcode_text;
+    class qstring_mba_printer_t : public vd_printer_t {
+        qstring &s;
+    public:
+        qstring_mba_printer_t(qstring &_s) : s(_s) {}
+        AS_PRINTF(3, 4) int hexapi print(int indent, const char *format, ...) override {
+            va_list va;
+            va_start(va, format);
+            for (int i = 0; i < indent; i++)
+                s.append(' ');
+            s.cat_vsprnt(format, va);
+            va_end(va);
+            return s.length();
+        }
+    };
+    qstring_mba_printer_t qp(microcode_text);
+    mba->print(qp);
+
+    // Get basic blocks info
+    nlohmann::json blocks = nlohmann::json::array();
+    for (int i = 0; i < mba->qty; i++) {
+        mblock_t* blk = mba->get_mblock(i);
+
+        nlohmann::json block;
+        block["serial"] = blk->serial;
+        block["start"] = static_cast<uint64_t>(blk->start);
+        block["end"] = static_cast<uint64_t>(blk->end);
+        block["type"] = blk->type;
+        block["npred"] = blk->npred();
+        block["nsucc"] = blk->nsucc();
+
+        // Get instruction count
+        int insn_count = 0;
+        for (minsn_t* ins = blk->head; ins != nullptr; ins = ins->next) {
+            insn_count++;
+        }
+        block["insn_count"] = insn_count;
+
+        blocks.push_back(block);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["maturity"] = mba->maturity;
+    result["maturity_name"] = maturity_str;
+    result["microcode"] = microcode_text.c_str();
+    result["blocks"] = blocks;
+    result["block_count"] = mba->qty;
+
+    delete mba;
+    return result;
+}
+
+inline nlohmann::json get_local_variables(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function found at address");
+    }
+
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available");
+    }
+
+    hexrays_failure_t hf;
+    cfuncptr_t cfunc = decompile_func(pfn, &hf, 0);
+
+    if (!cfunc) {
+        throw std::runtime_error("Failed to decompile function");
+    }
+
+    nlohmann::json lvars = nlohmann::json::array();
+    lvars_t* vars = cfunc->get_lvars();
+
+    if (vars) {
+        for (size_t i = 0; i < vars->size(); i++) {
+            const lvar_t& var = (*vars)[i];
+
+            qstring var_type_str;
+            var.type().print(&var_type_str);
+
+            nlohmann::json lvar;
+            lvar["index"] = i;
+            lvar["name"] = var.name.c_str();
+            lvar["type"] = var_type_str.c_str();
+            lvar["width"] = var.width;
+            lvar["is_arg"] = var.is_arg_var();
+            lvar["is_result"] = var.is_result_var();
+            lvar["used"] = var.used();
+            lvar["is_promoted_arg"] = var.is_promoted_arg();
+
+            // Get comments if any
+            if (!var.cmt.empty()) {
+                lvar["comment"] = var.cmt.c_str();
+            }
+
+            lvars.push_back(lvar);
+        }
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["lvars"] = lvars;
+    result["count"] = lvars.size();
+
+    return result;
+}
+
+inline nlohmann::json get_ctree(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function found at address");
+    }
+
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available");
+    }
+
+    hexrays_failure_t hf;
+    cfuncptr_t cfunc = decompile_func(pfn, &hf, 0);
+
+    if (!cfunc) {
+        throw std::runtime_error("Failed to decompile function");
+    }
+
+    // Print the ctree structure
+    qstring tree_text;
+    cfunc->body.print1(&tree_text, &*cfunc);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["ctree"] = tree_text.c_str();
+
+    return result;
+}
+
+inline nlohmann::json print_microcode_block(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int block_serial = args.value("block_serial", 0);
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function found at address");
+    }
+
+    if (!init_hexrays_plugin()) {
+        throw std::runtime_error("Hex-Rays decompiler not available");
+    }
+
+    mba_ranges_t mbr(pfn);
+    hexrays_failure_t hf;
+    mba_t* mba = ::gen_microcode(mbr, &hf, nullptr, 0, MMAT_GLBOPT3);
+
+    if (!mba) {
+        throw std::runtime_error("Microcode generation failed");
+    }
+
+    if (block_serial >= mba->qty) {
+        delete mba;
+        throw std::runtime_error("Block serial out of range");
+    }
+
+    mblock_t* blk = mba->get_mblock(block_serial);
+
+    // Print all instructions in the block
+    nlohmann::json instructions = nlohmann::json::array();
+    for (minsn_t* ins = blk->head; ins != nullptr; ins = ins->next) {
+        qstring insn_str;
+        ins->print(&insn_str);
+
+        nlohmann::json insn;
+        insn["ea"] = static_cast<uint64_t>(ins->ea);
+        insn["opcode"] = ins->opcode;
+        insn["text"] = insn_str.c_str();
+
+        instructions.push_back(insn);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["block_serial"] = block_serial;
+    result["start"] = static_cast<uint64_t>(blk->start);
+    result["end"] = static_cast<uint64_t>(blk->end);
+    result["instructions"] = instructions;
+    result["insn_count"] = instructions.size();
+
+    delete mba;
     return result;
 }
 

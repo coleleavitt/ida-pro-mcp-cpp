@@ -358,6 +358,100 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"address"})}
         },
         ida_mcp::get_func_ranges
+    },
+
+    // ===== Decompilation Tools (Hex-Rays) =====
+    {
+        "decompile_function",
+        "Decompile function to pseudocode using Hex-Rays decompiler",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}, {"description", "Decompilation flags"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::decompile_function
+    },
+    {
+        "decompile_snippet",
+        "Decompile arbitrary code range",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_address", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_address", {{"type", "integer"}, {"description", "End address"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_address"})}
+        },
+        ida_mcp::decompile_snippet
+    },
+    {
+        "generate_microcode",
+        "Generate microcode IR for function",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {
+                        "maturity",
+                        {
+                            {"type", "string"},
+                            {"default", "MMAT_GLBOPT3"},
+                            {"enum", nlohmann::json::array({
+                                "MMAT_GENERATED", "MMAT_PREOPTIMIZED", "MMAT_LOCOPT",
+                                "MMAT_CALLS", "MMAT_GLBOPT1", "MMAT_GLBOPT2", "MMAT_GLBOPT3"
+                            })},
+                            {"description", "Microcode maturity level"}
+                        }
+                    }
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::generate_microcode
+    },
+    {
+        "get_local_variables",
+        "Get local variables from decompiled function",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_local_variables
+    },
+    {
+        "get_ctree",
+        "Get C-tree AST structure of decompiled function",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_ctree
+    },
+    {
+        "get_microcode_block",
+        "Get detailed microcode for specific basic block",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"block_serial", {{"type", "integer"}, {"default", 0}, {"description", "Block index"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::print_microcode_block
     }
 };
 
