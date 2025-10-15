@@ -15,6 +15,8 @@
 #include <strlist.hpp>
 #include <ua.hpp>
 #include <hexrays.hpp>
+#include <typeinf.hpp>
+#include <srclang.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -1046,6 +1048,528 @@ inline nlohmann::json print_microcode_block(const nlohmann::json& args) {
     result["insn_count"] = instructions.size();
 
     delete mba;
+    return result;
+}
+
+// ===== Type System Tools =====
+
+inline nlohmann::json get_type(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tinfo_t tif;
+    if (!get_tinfo(&tif, address)) {
+        throw std::runtime_error("No type information at address");
+    }
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["type"] = type_str.c_str();
+    result["size"] = tif.get_size();
+    result["is_ptr"] = tif.is_ptr();
+    result["is_func"] = tif.is_func();
+    result["is_array"] = tif.is_array();
+    result["is_struct"] = tif.is_struct();
+    result["is_union"] = tif.is_union();
+    result["is_enum"] = tif.is_enum();
+
+    return result;
+}
+
+inline nlohmann::json set_type(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("type_string")) {
+        throw std::invalid_argument("Missing required parameters: address, type_string");
+    }
+
+    ea_t address = args["address"];
+    std::string type_string = args["type_string"];
+    int flags = args.value("flags", TINFO_DEFINITE);
+
+    tinfo_t tif;
+    if (!parse_decl(&tif, nullptr, get_idati(), type_string.c_str(), PT_SIL)) {
+        throw std::runtime_error("Failed to parse type declaration: " + type_string);
+    }
+
+    bool success = apply_tinfo(address, tif, flags);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["success"] = success;
+
+    return result;
+}
+
+inline nlohmann::json get_tinfo_details(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tinfo_t tif;
+    if (!get_tinfo(&tif, address)) {
+        throw std::runtime_error("No type information at address");
+    }
+
+    qstring type_str, name;
+    tif.print(&type_str);
+    tif.get_type_name(&name);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["type"] = type_str.c_str();
+    result["type_name"] = name.c_str();
+    result["size"] = tif.get_size();
+    result["is_const"] = tif.is_const();
+    result["is_volatile"] = tif.is_volatile();
+
+    return result;
+}
+
+inline nlohmann::json parse_type_declaration(const nlohmann::json& args) {
+    if (!args.contains("declaration")) {
+        throw std::invalid_argument("Missing required parameter: declaration");
+    }
+
+    std::string decl = args["declaration"];
+    int flags = args.value("flags", PT_SIL);
+
+    tinfo_t tif;
+    qstring name;
+    if (!parse_decl(&tif, &name, get_idati(), decl.c_str(), flags)) {
+        throw std::runtime_error("Failed to parse type declaration");
+    }
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["type"] = type_str.c_str();
+    result["name"] = name.c_str();
+    result["size"] = tif.get_size();
+    result["success"] = true;
+
+    return result;
+}
+
+inline nlohmann::json print_type_at(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int flags = args.value("flags", PRTYPE_1LINE);
+
+    qstring type_str;
+    if (!print_type(&type_str, address, flags)) {
+        throw std::runtime_error("Failed to print type");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["type"] = type_str.c_str();
+
+    return result;
+}
+
+inline nlohmann::json get_type_size(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tinfo_t tif;
+    if (!get_tinfo(&tif, address)) {
+        throw std::runtime_error("No type information at address");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["size"] = tif.get_size();
+
+    return result;
+}
+
+// Structure/Union/Enum Tools
+
+inline nlohmann::json get_struct_by_name(const nlohmann::json& args) {
+    if (!args.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string name = args["name"];
+
+    tinfo_t tif;
+    if (!tif.get_named_type(get_idati(), name.c_str())) {
+        throw std::runtime_error("Structure not found: " + name);
+    }
+
+    if (!tif.is_struct() && !tif.is_union()) {
+        throw std::runtime_error("Type is not a structure or union: " + name);
+    }
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["name"] = name;
+    result["type"] = type_str.c_str();
+    result["size"] = tif.get_size();
+    result["is_union"] = tif.is_union();
+
+    return result;
+}
+
+inline nlohmann::json get_struct_members(const nlohmann::json& args) {
+    if (!args.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string name = args["name"];
+
+    tinfo_t tif;
+    if (!tif.get_named_type(get_idati(), name.c_str())) {
+        throw std::runtime_error("Structure not found: " + name);
+    }
+
+    udt_type_data_t udt;
+    if (!tif.get_udt_details(&udt)) {
+        throw std::runtime_error("Failed to get structure details");
+    }
+
+    nlohmann::json members = nlohmann::json::array();
+    for (size_t i = 0; i < udt.size(); i++) {
+        const udm_t& member = udt[i];
+
+        qstring member_type;
+        member.type.print(&member_type);
+
+        nlohmann::json mem;
+        mem["name"] = member.name.c_str();
+        mem["offset"] = static_cast<uint64_t>(member.offset / 8); // bits to bytes
+        mem["size"] = member.size / 8;
+        mem["type"] = member_type.c_str();
+
+        members.push_back(mem);
+    }
+
+    nlohmann::json result;
+    result["name"] = name;
+    result["members"] = members;
+    result["count"] = members.size();
+
+    return result;
+}
+
+inline nlohmann::json get_struct_member_at_offset(const nlohmann::json& args) {
+    if (!args.contains("name") || !args.contains("offset")) {
+        throw std::invalid_argument("Missing required parameters: name, offset");
+    }
+
+    std::string name = args["name"];
+    uint64_t offset = args["offset"];
+
+    tinfo_t tif;
+    if (!tif.get_named_type(get_idati(), name.c_str())) {
+        throw std::runtime_error("Structure not found: " + name);
+    }
+
+    udt_type_data_t udt;
+    if (!tif.get_udt_details(&udt)) {
+        throw std::runtime_error("Failed to get structure details");
+    }
+
+    // Find member at offset
+    for (size_t i = 0; i < udt.size(); i++) {
+        const udm_t& member = udt[i];
+        uint64_t member_offset = member.offset / 8;
+
+        if (member_offset == offset) {
+            qstring member_type;
+            member.type.print(&member_type);
+
+            nlohmann::json result;
+            result["name"] = member.name.c_str();
+            result["offset"] = member_offset;
+            result["size"] = member.size / 8;
+            result["type"] = member_type.c_str();
+
+            return result;
+        }
+    }
+
+    throw std::runtime_error("No member found at offset " + std::to_string(offset));
+}
+
+inline nlohmann::json get_enum_members(const nlohmann::json& args) {
+    if (!args.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string name = args["name"];
+
+    tinfo_t tif;
+    if (!tif.get_named_type(get_idati(), name.c_str())) {
+        throw std::runtime_error("Enum not found: " + name);
+    }
+
+    if (!tif.is_enum()) {
+        throw std::runtime_error("Type is not an enum: " + name);
+    }
+
+    enum_type_data_t etd;
+    if (!tif.get_enum_details(&etd)) {
+        throw std::runtime_error("Failed to get enum details");
+    }
+
+    nlohmann::json members = nlohmann::json::array();
+    for (size_t i = 0; i < etd.size(); i++) {
+        const edm_t& member = etd[i];
+
+        nlohmann::json mem;
+        mem["name"] = member.name.c_str();
+        mem["value"] = static_cast<int64_t>(member.value);
+
+        members.push_back(mem);
+    }
+
+    nlohmann::json result;
+    result["name"] = name;
+    result["members"] = members;
+    result["count"] = members.size();
+
+    return result;
+}
+
+// Function Type Tools
+
+inline nlohmann::json get_function_type(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tinfo_t tif;
+    if (!get_tinfo(&tif, address)) {
+        throw std::runtime_error("No type information at address");
+    }
+
+    if (!tif.is_func()) {
+        throw std::runtime_error("Address does not have function type");
+    }
+
+    func_type_data_t ftd;
+    if (!tif.get_func_details(&ftd)) {
+        throw std::runtime_error("Failed to get function details");
+    }
+
+    qstring ret_type_str;
+    ftd.rettype.print(&ret_type_str);
+
+    nlohmann::json args_array = nlohmann::json::array();
+    for (size_t i = 0; i < ftd.size(); i++) {
+        const funcarg_t& arg = ftd[i];
+
+        qstring arg_type;
+        arg.type.print(&arg_type);
+
+        nlohmann::json arg_obj;
+        arg_obj["name"] = arg.name.c_str();
+        arg_obj["type"] = arg_type.c_str();
+
+        args_array.push_back(arg_obj);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["return_type"] = ret_type_str.c_str();
+    result["arguments"] = args_array;
+    result["arg_count"] = ftd.size();
+    result["calling_convention"] = ftd.cc;
+
+    return result;
+}
+
+inline nlohmann::json set_function_type(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("type_string")) {
+        throw std::invalid_argument("Missing required parameters: address, type_string");
+    }
+
+    ea_t address = args["address"];
+    std::string type_string = args["type_string"];
+
+    tinfo_t tif;
+    if (!parse_decl(&tif, nullptr, get_idati(), type_string.c_str(), PT_SIL)) {
+        throw std::runtime_error("Failed to parse function type declaration");
+    }
+
+    if (!tif.is_func()) {
+        throw std::runtime_error("Parsed type is not a function type");
+    }
+
+    bool success = apply_tinfo(address, tif, TINFO_DEFINITE);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["success"] = success;
+
+    return result;
+}
+
+inline nlohmann::json get_function_return_type(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tinfo_t tif;
+    if (!get_tinfo(&tif, address)) {
+        throw std::runtime_error("No type information at address");
+    }
+
+    if (!tif.is_func()) {
+        throw std::runtime_error("Address does not have function type");
+    }
+
+    func_type_data_t ftd;
+    if (!tif.get_func_details(&ftd)) {
+        throw std::runtime_error("Failed to get function details");
+    }
+
+    qstring ret_type_str;
+    ftd.rettype.print(&ret_type_str);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["return_type"] = ret_type_str.c_str();
+    result["size"] = ftd.rettype.get_size();
+
+    return result;
+}
+
+// Named Type Tools
+
+inline nlohmann::json get_named_type(const nlohmann::json& args) {
+    if (!args.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string name = args["name"];
+
+    tinfo_t tif;
+    if (!tif.get_named_type(get_idati(), name.c_str())) {
+        throw std::runtime_error("Type not found: " + name);
+    }
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["name"] = name;
+    result["type"] = type_str.c_str();
+    result["size"] = tif.get_size();
+    result["is_struct"] = tif.is_struct();
+    result["is_union"] = tif.is_union();
+    result["is_enum"] = tif.is_enum();
+    result["is_typedef"] = tif.is_typedef();
+
+    return result;
+}
+
+inline nlohmann::json get_numbered_type(const nlohmann::json& args) {
+    if (!args.contains("ordinal")) {
+        throw std::invalid_argument("Missing required parameter: ordinal");
+    }
+
+    uint32_t ordinal = args["ordinal"];
+
+    const type_t* type = nullptr;
+    const p_list* fields = nullptr;
+    qstring name;
+
+    if (!get_numbered_type(get_idati(), ordinal, &type, &fields, nullptr, nullptr)) {
+        throw std::runtime_error("Failed to get type at ordinal " + std::to_string(ordinal));
+    }
+
+    get_numbered_type_name(get_idati(), ordinal);
+
+    tinfo_t tif;
+    tif.deserialize(get_idati(), &type, &fields);
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["ordinal"] = ordinal;
+    result["type"] = type_str.c_str();
+    result["size"] = tif.get_size();
+
+    return result;
+}
+
+// Objective-C Tools
+
+inline nlohmann::json parse_objc_declaration(const nlohmann::json& args) {
+    if (!args.contains("declaration")) {
+        throw std::invalid_argument("Missing required parameter: declaration");
+    }
+
+    std::string decl = args["declaration"];
+
+    // Select Objective-C parser
+    if (!select_parser_by_srclang(SRCLANG_OBJC)) {
+        throw std::runtime_error("Objective-C parser not available");
+    }
+
+    tinfo_t tif;
+    qstring name;
+    if (!parse_decl(&tif, &name, get_idati(), decl.c_str(), PT_SIL)) {
+        throw std::runtime_error("Failed to parse Objective-C declaration");
+    }
+
+    qstring type_str;
+    tif.print(&type_str);
+
+    nlohmann::json result;
+    result["type"] = type_str.c_str();
+    result["name"] = name.c_str();
+    result["size"] = tif.get_size();
+    result["success"] = true;
+
+    return result;
+}
+
+inline nlohmann::json parse_declarations(const nlohmann::json& args) {
+    if (!args.contains("declarations")) {
+        throw std::invalid_argument("Missing required parameter: declarations");
+    }
+
+    std::string decls = args["declarations"];
+    std::string lang = args.value("language", "C");
+
+    srclang_t srclang = SRCLANG_C;
+    if (lang == "CPP" || lang == "C++") {
+        srclang = SRCLANG_CPP;
+    } else if (lang == "OBJC" || lang == "Objective-C") {
+        srclang = SRCLANG_OBJC;
+    }
+
+    int errors = parse_decls_for_srclang(srclang, get_idati(), decls.c_str(), false);
+
+    nlohmann::json result;
+    result["errors"] = errors;
+    result["success"] = (errors == 0);
+    result["language"] = lang;
+
     return result;
 }
 

@@ -452,6 +452,209 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"address"})}
         },
         ida_mcp::print_microcode_block
+    },
+
+    // ===== Type System Tools =====
+    {
+        "get_type",
+        "Get type information at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_type
+    },
+    {
+        "set_type",
+        "Apply type to address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"type_string", {{"type", "string"}, {"description", "Type declaration string"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "type_string"})}
+        },
+        ida_mcp::set_type
+    },
+    {
+        "get_tinfo",
+        "Get detailed tinfo_t object information",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_tinfo_details
+    },
+    {
+        "parse_type_declaration",
+        "Parse C/C++/Objective-C type declaration",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"declaration", {{"type", "string"}, {"description", "Type declaration"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"declaration"})}
+        },
+        ida_mcp::parse_type_declaration
+    },
+    {
+        "print_type",
+        "Format type as string at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::print_type_at
+    },
+    {
+        "get_type_size",
+        "Get size of type at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_type_size
+    },
+    {
+        "get_struct_by_name",
+        "Get structure definition by name",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Structure name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::get_struct_by_name
+    },
+    {
+        "get_struct_members",
+        "List all members of a structure",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Structure name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::get_struct_members
+    },
+    {
+        "get_struct_member",
+        "Get structure member at specific offset",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"name", {{"type", "string"}, {"description", "Structure name"}}},
+                    {"offset", {{"type", "integer"}, {"description", "Member offset"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"name", "offset"})}
+        },
+        ida_mcp::get_struct_member_at_offset
+    },
+    {
+        "get_enum_members",
+        "List all members of an enum",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Enum name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::get_enum_members
+    },
+    {
+        "get_function_type",
+        "Get function signature and arguments",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_function_type
+    },
+    {
+        "set_function_type",
+        "Set function signature",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}}},
+                    {"type_string", {{"type", "string"}, {"description", "Function type declaration"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "type_string"})}
+        },
+        ida_mcp::set_function_type
+    },
+    {
+        "get_return_type",
+        "Get function return type",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_function_return_type
+    },
+    {
+        "get_named_type",
+        "Get type from type library by name",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Type name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::get_named_type
+    },
+    {
+        "get_numbered_type",
+        "Get type by ordinal number",
+        {
+            {"type", "object"},
+            {"properties", {{"ordinal", {{"type", "integer"}, {"description", "Type ordinal"}}}}},
+            {"required", nlohmann::json::array({"ordinal"})}
+        },
+        ida_mcp::get_numbered_type
+    },
+    {
+        "parse_objc_declaration",
+        "Parse Objective-C type declaration",
+        {
+            {"type", "object"},
+            {"properties", {{"declaration", {{"type", "string"}, {"description", "Objective-C declaration"}}}}},
+            {"required", nlohmann::json::array({"declaration"})}
+        },
+        ida_mcp::parse_objc_declaration
+    },
+    {
+        "parse_declarations",
+        "Parse multiple type declarations in specified language",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"declarations", {{"type", "string"}, {"description", "Type declarations"}}},
+                    {"language", {{"type", "string"}, {"enum", nlohmann::json::array({"C", "C++", "CPP", "OBJC", "Objective-C"})}, {"default", "C"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"declarations"})}
+        },
+        ida_mcp::parse_declarations
     }
 };
 
