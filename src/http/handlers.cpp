@@ -38,7 +38,27 @@ nlohmann::json handle_tools_list(const nlohmann::json &params) {
 }
 
 nlohmann::json handle_tool_call(const nlohmann::json &params) {
-    std::string tool_name = params["name"];
-    nlohmann::json args = params.value("arguments", nlohmann::json::object());
+    if (!params.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string tool_name;
+    try {
+        tool_name = params["name"];
+    } catch (const nlohmann::json::exception& e) {
+        throw std::invalid_argument("Invalid name parameter: " + std::string(e.what()));
+    }
+
+    if (tool_name.empty()) {
+        throw std::invalid_argument("Tool name cannot be empty");
+    }
+
+    nlohmann::json args;
+    try {
+        args = params.value("arguments", nlohmann::json::object());
+    } catch (const nlohmann::json::exception& e) {
+        throw std::invalid_argument("Invalid arguments parameter: " + std::string(e.what()));
+    }
+
     return ToolRegistry::instance().call_tool(tool_name, args);
 }

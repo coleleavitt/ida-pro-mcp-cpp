@@ -365,8 +365,18 @@ static const std::vector<ToolDefinition> tool_definitions = {
 nlohmann::json GenericTool::execute(const nlohmann::json &args) {
     return execute_sync_wrapper([&]() -> nlohmann::json {
         try {
+            // Validate that args is an object
+            if (!args.is_object()) {
+                throw std::invalid_argument("Tool arguments must be a JSON object");
+            }
+
             // Call the tool function and get the result data
             nlohmann::json result_data = func_(args);
+
+            // Validate result is a valid JSON object/array
+            if (!result_data.is_object() && !result_data.is_array()) {
+                throw std::runtime_error("Tool returned invalid JSON type (must be object or array)");
+            }
 
             // Wrap in MCP response format
             nlohmann::json content_item;
@@ -376,10 +386,28 @@ nlohmann::json GenericTool::execute(const nlohmann::json &args) {
             nlohmann::json result;
             result["content"] = nlohmann::json::array({content_item});
             return result;
+        } catch (const std::invalid_argument &e) {
+            nlohmann::json error_content;
+            error_content["type"] = "text";
+            error_content["text"] = std::string("Invalid arguments: ") + e.what();
+
+            nlohmann::json result;
+            result["content"] = nlohmann::json::array({error_content});
+            result["isError"] = true;
+            return result;
+        } catch (const std::runtime_error &e) {
+            nlohmann::json error_content;
+            error_content["type"] = "text";
+            error_content["text"] = std::string("Runtime error: ") + e.what();
+
+            nlohmann::json result;
+            result["content"] = nlohmann::json::array({error_content});
+            result["isError"] = true;
+            return result;
         } catch (const std::exception &e) {
             nlohmann::json error_content;
             error_content["type"] = "text";
-            error_content["text"] = std::string("Error: ") + e.what();
+            error_content["text"] = std::string("Unexpected error: ") + e.what();
 
             nlohmann::json result;
             result["content"] = nlohmann::json::array({error_content});
@@ -430,11 +458,27 @@ nlohmann::json ToolRegistry::get_tools_list() const {
 }
 
 nlohmann::json ToolRegistry::call_tool(const std::string &name, const nlohmann::json &args) {
-    auto it = tool_map_.find(name);
-    if (it == tool_map_.end()) {
+    if (name.empty()) {
         nlohmann::json error_result;
         error_result["content"] = nlohmann::json::array({
-            {{"type", "text"}, {"text", "Unknown tool: " + name}}
+            {{"type", "text"}, {"text", "Tool name cannot be empty"}}
+        });
+        error_result["isError"] = true;
+        return error_result;
+    }
+
+    auto it = tool_map_.find(name);
+    if (it == tool_map_.end()) {
+        // List available tools in error message
+        std::string available_tools = "Available tools: ";
+        for (size_t i = 0; i < tools_.size(); ++i) {
+            if (i > 0) available_tools += ", ";
+            available_tools += tools_[i]->get_name();
+        }
+
+        nlohmann::json error_result;
+        error_result["content"] = nlohmann::json::array({
+            {{"type", "text"}, {"text", "Unknown tool: " + name + ". " + available_tools}}
         });
         error_result["isError"] = true;
         return error_result;

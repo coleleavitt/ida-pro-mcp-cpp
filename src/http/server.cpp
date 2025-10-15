@@ -86,8 +86,65 @@ void McpServer::server_thread_func() {
             }
 
             try {
-                auto body = nlohmann::json::parse(req.body);
+                // Validate request body
+                if (req.body.empty()) {
+                    msg("[IDA MCP] Empty request body\n");
+                    res.status = 400;
+                    nlohmann::json error_response;
+                    error_response["jsonrpc"] = "2.0";
+                    error_response["error"] = {
+                        {"code", -32700},
+                        {"message", "Parse error: empty request body"}
+                    };
+                    res.set_content(error_response.dump(), "application/json");
+                    return;
+                }
+
+                nlohmann::json body;
+                try {
+                    body = nlohmann::json::parse(req.body);
+                } catch (const nlohmann::json::parse_error& e) {
+                    msg("[IDA MCP] JSON parse error: %s\n", e.what());
+                    res.status = 400;
+                    nlohmann::json error_response;
+                    error_response["jsonrpc"] = "2.0";
+                    error_response["error"] = {
+                        {"code", -32700},
+                        {"message", std::string("Parse error: ") + e.what()}
+                    };
+                    res.set_content(error_response.dump(), "application/json");
+                    return;
+                }
+
+                // Validate JSON-RPC structure
+                if (!body.contains("jsonrpc") || body["jsonrpc"] != "2.0") {
+                    msg("[IDA MCP] Invalid JSON-RPC version\n");
+                    res.status = 400;
+                    nlohmann::json error_response;
+                    error_response["jsonrpc"] = "2.0";
+                    error_response["error"] = {
+                        {"code", -32600},
+                        {"message", "Invalid Request: missing or invalid jsonrpc version"}
+                    };
+                    res.set_content(error_response.dump(), "application/json");
+                    return;
+                }
+
                 std::string method = body.value("method", "");
+                if (method.empty()) {
+                    msg("[IDA MCP] Missing method\n");
+                    res.status = 400;
+                    nlohmann::json error_response;
+                    error_response["jsonrpc"] = "2.0";
+                    error_response["id"] = body.value("id", nlohmann::json());
+                    error_response["error"] = {
+                        {"code", -32600},
+                        {"message", "Invalid Request: missing method"}
+                    };
+                    res.set_content(error_response.dump(), "application/json");
+                    return;
+                }
+
                 nlohmann::json params = body.value("params", nlohmann::json::object());
                 nlohmann::json id = body.value("id", nlohmann::json());
 
@@ -128,8 +185,28 @@ void McpServer::server_thread_func() {
                 std::string response_str = response.dump();
                 msg("[IDA MCP] Response size: %lu bytes\n", response_str.size());
                 res.set_content(response_str, "application/json");
+            } catch (const std::invalid_argument& e) {
+                msg("[IDA MCP] Invalid argument: %s\n", e.what());
+                res.status = 400;
+                nlohmann::json error_response;
+                error_response["jsonrpc"] = "2.0";
+                error_response["error"] = {
+                    {"code", -32602},
+                    {"message", std::string("Invalid params: ") + e.what()}
+                };
+                res.set_content(error_response.dump(), "application/json");
+            } catch (const std::runtime_error& e) {
+                msg("[IDA MCP] Runtime error: %s\n", e.what());
+                res.status = 500;
+                nlohmann::json error_response;
+                error_response["jsonrpc"] = "2.0";
+                error_response["error"] = {
+                    {"code", -32603},
+                    {"message", std::string("Internal error: ") + e.what()}
+                };
+                res.set_content(error_response.dump(), "application/json");
             } catch (const std::exception &e) {
-                msg("[IDA MCP] Error: %s\n", e.what());
+                msg("[IDA MCP] Unexpected error: %s\n", e.what());
                 res.status = 500;
                 nlohmann::json error_response;
                 error_response["jsonrpc"] = "2.0";

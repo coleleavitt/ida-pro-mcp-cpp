@@ -24,7 +24,8 @@ auto execute_sync_wrapper(Func &&func) {
         Func &f;
         RetType &res;
 
-        exec_helper(Func &func, RetType &result) : f(func), res(result) {}
+        exec_helper(Func &func, RetType &result) : f(func), res(result) {
+        }
 
         ssize_t idaapi execute() override {
             res = f();

@@ -75,11 +75,25 @@ inline nlohmann::json list_functions(const nlohmann::json& args) {
 }
 
 inline nlohmann::json get_function_at(const nlohmann::json& args) {
-    ea_t address = args["address"];
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address;
+    try {
+        address = args["address"];
+    } catch (const nlohmann::json::exception& e) {
+        throw std::invalid_argument("Invalid address parameter: " + std::string(e.what()));
+    }
+
+    if (address == BADADDR) {
+        throw std::invalid_argument("Invalid address: BADADDR");
+    }
+
     func_t* func = get_func(address);
 
     if (!func) {
-        throw std::runtime_error("No function at address");
+        throw std::runtime_error("No function found at address 0x" + std::to_string(static_cast<uint64_t>(address)));
     }
 
     qstring name;
