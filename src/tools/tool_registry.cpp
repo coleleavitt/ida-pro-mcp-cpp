@@ -655,6 +655,319 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"declarations"})}
         },
         ida_mcp::parse_declarations
+    },
+
+    // ===== Control Flow Graph Tools =====
+    {
+        "get_flowchart",
+        "Get function control flow graph with basic blocks",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_flowchart
+    },
+    {
+        "get_basic_blocks",
+        "List all basic blocks in function",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_basic_blocks
+    },
+    {
+        "get_basic_block_at",
+        "Get basic block containing address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_basic_block_at
+    },
+    {
+        "get_block_succs",
+        "Get successors of basic block",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"block_id", {{"type", "integer"}, {"description", "Block ID"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "block_id"})}
+        },
+        ida_mcp::get_block_succs
+    },
+    {
+        "get_block_preds",
+        "Get predecessors of basic block",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"block_id", {{"type", "integer"}, {"description", "Block ID"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "block_id"})}
+        },
+        ida_mcp::get_block_preds
+    },
+    {
+        "get_block_type",
+        "Get block type (normal/ret/noret/etc)",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"block_id", {{"type", "integer"}, {"description", "Block ID"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "block_id"})}
+        },
+        ida_mcp::get_block_type
+    },
+
+    // ===== Call Graph Tools =====
+    {
+        "generate_call_graph",
+        "Generate function call graph",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"depth", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::generate_call_graph
+    },
+    {
+        "get_caller_graph",
+        "Get callers recursively",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"depth", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_caller_graph
+    },
+    {
+        "get_callee_graph",
+        "Get callees recursively",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"depth", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_callee_graph
+    },
+
+    // ===== Stack Frame Analysis Tools =====
+    {
+        "get_frame",
+        "Get stack frame structure",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_frame
+    },
+    {
+        "get_frame_size",
+        "Get total frame size",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_frame_size
+    },
+    {
+        "get_stack_vars",
+        "Get stack variables",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_stack_vars
+    },
+    {
+        "get_stack_var_at",
+        "Get stack variable at offset",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"offset", {{"type", "integer"}, {"description", "Stack offset"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "offset"})}
+        },
+        ida_mcp::get_stack_var_at
+    },
+    {
+        "get_frame_args",
+        "Get function arguments from frame",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_frame_args
+    },
+    {
+        "get_frame_locals",
+        "Get local variables from frame",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_frame_locals
+    },
+
+    // ===== Import/Export Tables Tools =====
+    {
+        "get_import_modules",
+        "List import modules",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_import_modules
+    },
+    {
+        "get_imports",
+        "Get all imports from module",
+        {
+            {"type", "object"},
+            {"properties", {{"module_index", {{"type", "integer"}, {"description", "Module index"}}}}},
+            {"required", nlohmann::json::array({"module_index"})}
+        },
+        ida_mcp::get_imports
+    },
+    {
+        "enum_imports",
+        "Enumerate imports with callback",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::enum_imports
+    },
+    {
+        "get_export_count",
+        "Get number of exports",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_export_count
+    },
+    {
+        "get_exports",
+        "Get all exports",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_exports
+    },
+
+    // ===== Entry Points Tools =====
+    {
+        "get_entry_points",
+        "Get all entry points",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_entry_points
+    },
+    {
+        "get_entry_point",
+        "Get entry point by ordinal",
+        {
+            {"type", "object"},
+            {"properties", {{"ordinal", {{"type", "integer"}, {"description", "Entry point ordinal"}}}}},
+            {"required", nlohmann::json::array({"ordinal"})}
+        },
+        ida_mcp::get_entry_point
+    },
+    {
+        "get_entry_name",
+        "Get entry point name",
+        {
+            {"type", "object"},
+            {"properties", {{"ordinal", {{"type", "integer"}, {"description", "Entry point ordinal"}}}}},
+            {"required", nlohmann::json::array({"ordinal"})}
+        },
+        ida_mcp::get_entry_name
+    },
+
+    // ===== Pattern Search Tools =====
+    {
+        "search_binary",
+        "Binary pattern search",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"pattern", {{"type", "string"}, {"description", "Binary pattern"}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "pattern"})}
+        },
+        ida_mcp::search_binary
+    },
+    {
+        "find_pattern",
+        "Search for byte pattern",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"pattern", {{"type", "string"}, {"description", "Binary pattern"}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"limit", {{"type", "integer"}, {"default", 100}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "pattern"})}
+        },
+        ida_mcp::find_pattern
+    },
+    {
+        "search_text",
+        "Text string search",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"text", {{"type", "string"}, {"description", "Search text"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "text"})}
+        },
+        ida_mcp::search_text
     }
 };
 

@@ -17,6 +17,11 @@
 #include <hexrays.hpp>
 #include <typeinf.hpp>
 #include <srclang.hpp>
+#include <gdl.hpp>
+#include <frame.hpp>
+#include <nalt.hpp>
+#include <entry.hpp>
+#include <search.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -1569,6 +1574,873 @@ inline nlohmann::json parse_declarations(const nlohmann::json& args) {
     result["errors"] = errors;
     result["success"] = (errors == 0);
     result["language"] = lang;
+
+    return result;
+}
+
+// ===== Control Flow Graph Tools =====
+
+inline nlohmann::json get_flowchart(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int flags = args.value("flags", 0);
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, flags);
+
+    nlohmann::json blocks = nlohmann::json::array();
+    for (int i = 0; i < qfc.blocks.size(); i++) {
+        const qbasic_block_t& blk = qfc.blocks[i];
+
+        nlohmann::json block;
+        block["id"] = i;
+        block["start_ea"] = static_cast<uint64_t>(blk.start_ea);
+        block["end_ea"] = static_cast<uint64_t>(blk.end_ea);
+
+        nlohmann::json succs = nlohmann::json::array();
+        for (int succ : blk.succ) {
+            succs.push_back(succ);
+        }
+        block["succs"] = succs;
+
+        nlohmann::json preds = nlohmann::json::array();
+        for (int pred : blk.pred) {
+            preds.push_back(pred);
+        }
+        block["preds"] = preds;
+
+        fc_block_type_t btype = qfc.calc_block_type(i);
+        block["type"] = btype;
+
+        blocks.push_back(block);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["blocks"] = blocks;
+    result["block_count"] = qfc.blocks.size();
+
+    return result;
+}
+
+inline nlohmann::json get_basic_blocks(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, 0);
+
+    nlohmann::json blocks = nlohmann::json::array();
+    for (int i = 0; i < qfc.blocks.size(); i++) {
+        const qbasic_block_t& blk = qfc.blocks[i];
+
+        nlohmann::json block;
+        block["id"] = i;
+        block["start_ea"] = static_cast<uint64_t>(blk.start_ea);
+        block["end_ea"] = static_cast<uint64_t>(blk.end_ea);
+        block["size"] = blk.size();
+
+        blocks.push_back(block);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["blocks"] = blocks;
+    result["count"] = blocks.size();
+
+    return result;
+}
+
+inline nlohmann::json get_basic_block_at(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, 0);
+
+    // Find block containing address
+    for (int i = 0; i < qfc.blocks.size(); i++) {
+        const qbasic_block_t& blk = qfc.blocks[i];
+        if (blk.contains(address)) {
+            nlohmann::json result;
+            result["id"] = i;
+            result["start_ea"] = static_cast<uint64_t>(blk.start_ea);
+            result["end_ea"] = static_cast<uint64_t>(blk.end_ea);
+            result["size"] = blk.size();
+
+            nlohmann::json succs = nlohmann::json::array();
+            for (int succ : blk.succ) {
+                succs.push_back(succ);
+            }
+            result["succs"] = succs;
+
+            nlohmann::json preds = nlohmann::json::array();
+            for (int pred : blk.pred) {
+                preds.push_back(pred);
+            }
+            result["preds"] = preds;
+
+            return result;
+        }
+    }
+
+    throw std::runtime_error("No basic block contains the address");
+}
+
+inline nlohmann::json get_block_succs(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("block_id")) {
+        throw std::invalid_argument("Missing required parameters: address, block_id");
+    }
+
+    ea_t address = args["address"];
+    int block_id = args["block_id"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, 0);
+
+    if (block_id < 0 || block_id >= qfc.blocks.size()) {
+        throw std::runtime_error("Invalid block_id");
+    }
+
+    const qbasic_block_t& blk = qfc.blocks[block_id];
+    nlohmann::json succs = nlohmann::json::array();
+    for (int succ : blk.succ) {
+        succs.push_back(succ);
+    }
+
+    nlohmann::json result;
+    result["block_id"] = block_id;
+    result["succs"] = succs;
+    result["count"] = succs.size();
+
+    return result;
+}
+
+inline nlohmann::json get_block_preds(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("block_id")) {
+        throw std::invalid_argument("Missing required parameters: address, block_id");
+    }
+
+    ea_t address = args["address"];
+    int block_id = args["block_id"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, 0);
+
+    if (block_id < 0 || block_id >= qfc.blocks.size()) {
+        throw std::runtime_error("Invalid block_id");
+    }
+
+    const qbasic_block_t& blk = qfc.blocks[block_id];
+    nlohmann::json preds = nlohmann::json::array();
+    for (int pred : blk.pred) {
+        preds.push_back(pred);
+    }
+
+    nlohmann::json result;
+    result["block_id"] = block_id;
+    result["preds"] = preds;
+    result["count"] = preds.size();
+
+    return result;
+}
+
+inline nlohmann::json get_block_type(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("block_id")) {
+        throw std::invalid_argument("Missing required parameters: address, block_id");
+    }
+
+    ea_t address = args["address"];
+    int block_id = args["block_id"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    qflow_chart_t qfc("", pfn, pfn->start_ea, pfn->end_ea, 0);
+
+    if (block_id < 0 || block_id >= qfc.blocks.size()) {
+        throw std::runtime_error("Invalid block_id");
+    }
+
+    fc_block_type_t btype = qfc.calc_block_type(block_id);
+
+    nlohmann::json result;
+    result["block_id"] = block_id;
+    result["type"] = btype;
+    result["is_ret"] = is_ret_block(btype);
+    result["is_noret"] = is_noret_block(btype);
+
+    return result;
+}
+
+// ===== Call Graph Tools =====
+
+inline nlohmann::json generate_call_graph(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int depth = args.value("depth", 1);
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    // Simple call graph: just get direct callees
+    nlohmann::json nodes = nlohmann::json::array();
+    nlohmann::json edges = nlohmann::json::array();
+
+    // Add root node
+    qstring name;
+    get_func_name(&name, pfn->start_ea);
+    nlohmann::json root;
+    root["address"] = static_cast<uint64_t>(pfn->start_ea);
+    root["name"] = name.c_str();
+    nodes.push_back(root);
+
+    // Get callees
+    xrefblk_t xb;
+    for (ea_t ea = pfn->start_ea; ea < pfn->end_ea; ) {
+        for (bool ok = xb.first_from(ea, XREF_ALL); ok; ok = xb.next_from()) {
+            if (xb.iscode && (xb.type == fl_CN || xb.type == fl_CF)) {
+                func_t* callee = get_func(xb.to);
+                if (callee) {
+                    qstring callee_name;
+                    get_func_name(&callee_name, callee->start_ea);
+
+                    nlohmann::json node;
+                    node["address"] = static_cast<uint64_t>(callee->start_ea);
+                    node["name"] = callee_name.c_str();
+                    nodes.push_back(node);
+
+                    nlohmann::json edge;
+                    edge["from"] = static_cast<uint64_t>(pfn->start_ea);
+                    edge["to"] = static_cast<uint64_t>(callee->start_ea);
+                    edge["call_site"] = static_cast<uint64_t>(ea);
+                    edges.push_back(edge);
+                }
+            }
+        }
+        ea = next_head(ea, pfn->end_ea);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["nodes"] = nodes;
+    result["edges"] = edges;
+    result["node_count"] = nodes.size();
+    result["edge_count"] = edges.size();
+
+    return result;
+}
+
+inline nlohmann::json get_caller_graph(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int depth = args.value("depth", 1);
+
+    nlohmann::json callers = nlohmann::json::array();
+
+    xrefblk_t xb;
+    for (bool ok = xb.first_to(address, XREF_ALL); ok; ok = xb.next_to()) {
+        if (xb.iscode && (xb.type == fl_CN || xb.type == fl_CF)) {
+            func_t* caller = get_func(xb.from);
+            if (caller) {
+                qstring name;
+                get_func_name(&name, caller->start_ea);
+
+                nlohmann::json caller_info;
+                caller_info["address"] = static_cast<uint64_t>(caller->start_ea);
+                caller_info["name"] = name.c_str();
+                caller_info["call_site"] = static_cast<uint64_t>(xb.from);
+
+                callers.push_back(caller_info);
+            }
+        }
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["callers"] = callers;
+    result["count"] = callers.size();
+    result["depth"] = depth;
+
+    return result;
+}
+
+inline nlohmann::json get_callee_graph(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+    int depth = args.value("depth", 1);
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    nlohmann::json callees = nlohmann::json::array();
+
+    xrefblk_t xb;
+    for (ea_t ea = pfn->start_ea; ea < pfn->end_ea; ) {
+        for (bool ok = xb.first_from(ea, XREF_ALL); ok; ok = xb.next_from()) {
+            if (xb.iscode && (xb.type == fl_CN || xb.type == fl_CF)) {
+                func_t* callee = get_func(xb.to);
+                if (callee) {
+                    qstring name;
+                    get_func_name(&name, callee->start_ea);
+
+                    nlohmann::json callee_info;
+                    callee_info["address"] = static_cast<uint64_t>(callee->start_ea);
+                    callee_info["name"] = name.c_str();
+                    callee_info["call_site"] = static_cast<uint64_t>(ea);
+
+                    callees.push_back(callee_info);
+                }
+            }
+        }
+        ea = next_head(ea, pfn->end_ea);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["callees"] = callees;
+    result["count"] = callees.size();
+    result["depth"] = depth;
+
+    return result;
+}
+
+// ===== Stack Frame Analysis Tools =====
+
+inline nlohmann::json get_frame(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    tinfo_t frame_tif;
+    if (!get_func_frame(&frame_tif, pfn)) {
+        throw std::runtime_error("Failed to get function frame");
+    }
+
+    qstring frame_str;
+    frame_tif.print(&frame_str);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["frame_type"] = frame_str.c_str();
+    result["frame_size"] = get_frame_size(pfn);
+    result["frsize"] = pfn->frsize;
+    result["frregs"] = pfn->frregs;
+    result["argsize"] = pfn->argsize;
+
+    return result;
+}
+
+inline nlohmann::json get_frame_size(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["size"] = ::get_frame_size(pfn);
+
+    return result;
+}
+
+inline nlohmann::json get_stack_vars(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    tinfo_t frame_tif;
+    if (!get_func_frame(&frame_tif, pfn)) {
+        throw std::runtime_error("Failed to get function frame");
+    }
+
+    udt_type_data_t udt;
+    if (!frame_tif.get_udt_details(&udt)) {
+        throw std::runtime_error("Failed to get frame details");
+    }
+
+    nlohmann::json vars = nlohmann::json::array();
+    for (size_t i = 0; i < udt.size(); i++) {
+        const udm_t& member = udt[i];
+
+        qstring member_type;
+        member.type.print(&member_type);
+
+        nlohmann::json var;
+        var["name"] = member.name.c_str();
+        var["offset"] = static_cast<int64_t>(member.offset / 8);
+        var["size"] = member.size / 8;
+        var["type"] = member_type.c_str();
+
+        vars.push_back(var);
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["vars"] = vars;
+    result["count"] = vars.size();
+
+    return result;
+}
+
+inline nlohmann::json get_stack_var_at(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("offset")) {
+        throw std::invalid_argument("Missing required parameters: address, offset");
+    }
+
+    ea_t address = args["address"];
+    int64_t offset = args["offset"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    tinfo_t frame_tif;
+    if (!get_func_frame(&frame_tif, pfn)) {
+        throw std::runtime_error("Failed to get function frame");
+    }
+
+    udt_type_data_t udt;
+    if (!frame_tif.get_udt_details(&udt)) {
+        throw std::runtime_error("Failed to get frame details");
+    }
+
+    for (size_t i = 0; i < udt.size(); i++) {
+        const udm_t& member = udt[i];
+        int64_t member_offset = member.offset / 8;
+
+        if (member_offset == offset) {
+            qstring member_type;
+            member.type.print(&member_type);
+
+            nlohmann::json result;
+            result["name"] = member.name.c_str();
+            result["offset"] = member_offset;
+            result["size"] = member.size / 8;
+            result["type"] = member_type.c_str();
+
+            return result;
+        }
+    }
+
+    throw std::runtime_error("No stack variable at offset " + std::to_string(offset));
+}
+
+inline nlohmann::json get_frame_args(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    range_t args_range;
+    get_frame_part(&args_range, pfn, FPC_ARGS);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["args_start"] = static_cast<int64_t>(args_range.start_ea);
+    result["args_end"] = static_cast<int64_t>(args_range.end_ea);
+    result["args_size"] = args_range.size();
+
+    return result;
+}
+
+inline nlohmann::json get_frame_locals(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    func_t* pfn = get_func(address);
+    if (!pfn) {
+        throw std::runtime_error("No function at address");
+    }
+
+    range_t lvars_range;
+    get_frame_part(&lvars_range, pfn, FPC_LVARS);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(pfn->start_ea);
+    result["lvars_start"] = static_cast<int64_t>(lvars_range.start_ea);
+    result["lvars_end"] = static_cast<int64_t>(lvars_range.end_ea);
+    result["lvars_size"] = lvars_range.size();
+
+    return result;
+}
+
+// ===== Import/Export Tables Tools =====
+
+inline nlohmann::json get_import_modules(const nlohmann::json& args) {
+    nlohmann::json modules = nlohmann::json::array();
+
+    uint mod_qty = get_import_module_qty();
+    for (uint i = 0; i < mod_qty; i++) {
+        qstring mod_name;
+        get_import_module_name(&mod_name, i);
+
+        nlohmann::json mod;
+        mod["index"] = i;
+        mod["name"] = mod_name.c_str();
+
+        modules.push_back(mod);
+    }
+
+    nlohmann::json result;
+    result["modules"] = modules;
+    result["count"] = modules.size();
+
+    return result;
+}
+
+inline nlohmann::json get_imports(const nlohmann::json& args) {
+    if (!args.contains("module_index")) {
+        throw std::invalid_argument("Missing required parameter: module_index");
+    }
+
+    int module_index = args["module_index"];
+
+    qstring mod_name;
+    get_import_module_name(&mod_name, module_index);
+
+    nlohmann::json imports = nlohmann::json::array();
+
+    struct import_collector_t {
+        nlohmann::json* imports;
+        static int idaapi callback(ea_t ea, const char *name, uval_t ord, void *param) {
+            import_collector_t* ctx = (import_collector_t*)param;
+
+            nlohmann::json imp;
+            imp["address"] = static_cast<uint64_t>(ea);
+            imp["name"] = name ? name : "";
+            imp["ordinal"] = static_cast<uint64_t>(ord);
+
+            ctx->imports->push_back(imp);
+            return 1; // continue enumeration
+        }
+    };
+
+    import_collector_t ctx;
+    ctx.imports = &imports;
+    enum_import_names(module_index, import_collector_t::callback, &ctx);
+
+    nlohmann::json result;
+    result["module_index"] = module_index;
+    result["module_name"] = mod_name.c_str();
+    result["imports"] = imports;
+    result["count"] = imports.size();
+
+    return result;
+}
+
+inline nlohmann::json enum_imports(const nlohmann::json& args) {
+    nlohmann::json all_imports = nlohmann::json::array();
+
+    uint mod_qty = get_import_module_qty();
+    for (uint i = 0; i < mod_qty; i++) {
+        qstring mod_name;
+        get_import_module_name(&mod_name, i);
+
+        nlohmann::json imports = nlohmann::json::array();
+
+        struct import_collector_t {
+            nlohmann::json* imports;
+            static int idaapi callback(ea_t ea, const char *name, uval_t ord, void *param) {
+                import_collector_t* ctx = (import_collector_t*)param;
+
+                nlohmann::json imp;
+                imp["address"] = static_cast<uint64_t>(ea);
+                imp["name"] = name ? name : "";
+                imp["ordinal"] = static_cast<uint64_t>(ord);
+
+                ctx->imports->push_back(imp);
+                return 1;
+            }
+        };
+
+        import_collector_t ctx;
+        ctx.imports = &imports;
+        enum_import_names(i, import_collector_t::callback, &ctx);
+
+        nlohmann::json mod;
+        mod["module_name"] = mod_name.c_str();
+        mod["imports"] = imports;
+        mod["count"] = imports.size();
+
+        all_imports.push_back(mod);
+    }
+
+    nlohmann::json result;
+    result["modules"] = all_imports;
+    result["module_count"] = all_imports.size();
+
+    return result;
+}
+
+inline nlohmann::json get_export_count(const nlohmann::json& args) {
+    nlohmann::json result;
+    result["count"] = get_entry_qty();
+
+    return result;
+}
+
+inline nlohmann::json get_exports(const nlohmann::json& args) {
+    nlohmann::json exports = nlohmann::json::array();
+
+    size_t qty = get_entry_qty();
+    for (size_t i = 0; i < qty; i++) {
+        uval_t ord = get_entry_ordinal(i);
+        ea_t ea = get_entry(ord);
+
+        qstring name;
+        get_entry_name(&name, ord);
+
+        nlohmann::json exp;
+        exp["index"] = i;
+        exp["ordinal"] = static_cast<uint64_t>(ord);
+        exp["address"] = static_cast<uint64_t>(ea);
+        exp["name"] = name.c_str();
+
+        exports.push_back(exp);
+    }
+
+    nlohmann::json result;
+    result["exports"] = exports;
+    result["count"] = exports.size();
+
+    return result;
+}
+
+// ===== Entry Points Tools =====
+
+inline nlohmann::json get_entry_points(const nlohmann::json& args) {
+    nlohmann::json entries = nlohmann::json::array();
+
+    size_t qty = get_entry_qty();
+    for (size_t i = 0; i < qty; i++) {
+        uval_t ord = get_entry_ordinal(i);
+        ea_t ea = get_entry(ord);
+
+        qstring name;
+        get_entry_name(&name, ord);
+
+        nlohmann::json entry;
+        entry["index"] = i;
+        entry["ordinal"] = static_cast<uint64_t>(ord);
+        entry["address"] = static_cast<uint64_t>(ea);
+        entry["name"] = name.c_str();
+
+        entries.push_back(entry);
+    }
+
+    nlohmann::json result;
+    result["entries"] = entries;
+    result["count"] = entries.size();
+
+    return result;
+}
+
+inline nlohmann::json get_entry_point(const nlohmann::json& args) {
+    if (!args.contains("ordinal")) {
+        throw std::invalid_argument("Missing required parameter: ordinal");
+    }
+
+    uval_t ordinal = args["ordinal"];
+
+    ea_t ea = get_entry(ordinal);
+    if (ea == BADADDR) {
+        throw std::runtime_error("Entry point not found");
+    }
+
+    qstring name;
+    get_entry_name(&name, ordinal);
+
+    nlohmann::json result;
+    result["ordinal"] = static_cast<uint64_t>(ordinal);
+    result["address"] = static_cast<uint64_t>(ea);
+    result["name"] = name.c_str();
+
+    return result;
+}
+
+inline nlohmann::json get_entry_name(const nlohmann::json& args) {
+    if (!args.contains("ordinal")) {
+        throw std::invalid_argument("Missing required parameter: ordinal");
+    }
+
+    uval_t ordinal = args["ordinal"];
+
+    qstring name;
+    if (::get_entry_name(&name, ordinal) < 0) {
+        throw std::runtime_error("Entry point not found");
+    }
+
+    nlohmann::json result;
+    result["ordinal"] = static_cast<uint64_t>(ordinal);
+    result["name"] = name.c_str();
+
+    return result;
+}
+
+// ===== Pattern Search Tools =====
+
+inline nlohmann::json search_binary(const nlohmann::json& args) {
+    if (!args.contains("start_ea") || !args.contains("pattern")) {
+        throw std::invalid_argument("Missing required parameters: start_ea, pattern");
+    }
+
+    ea_t start_ea = args["start_ea"];
+    ea_t end_ea = args.value("end_ea", BADADDR);
+    std::string pattern = args["pattern"];
+    int flags = args.value("flags", SEARCH_DOWN);
+
+    compiled_binpat_vec_t compiled;
+    qstring error_msg;
+
+    if (!parse_binpat_str(&compiled, start_ea, pattern.c_str(), 16, PBSENC_DEF1BPU, &error_msg)) {
+        throw std::runtime_error("Failed to parse pattern: " + std::string(error_msg.c_str()));
+    }
+
+    ea_t found = bin_search(start_ea, end_ea, compiled, flags);
+
+    nlohmann::json result;
+    result["start_ea"] = static_cast<uint64_t>(start_ea);
+    result["pattern"] = pattern;
+    result["found"] = (found != BADADDR);
+    if (found != BADADDR) {
+        result["address"] = static_cast<uint64_t>(found);
+    }
+
+    return result;
+}
+
+inline nlohmann::json find_pattern(const nlohmann::json& args) {
+    if (!args.contains("start_ea") || !args.contains("pattern")) {
+        throw std::invalid_argument("Missing required parameters: start_ea, pattern");
+    }
+
+    ea_t start_ea = args["start_ea"];
+    ea_t end_ea = args.value("end_ea", BADADDR);
+    std::string pattern = args["pattern"];
+    int flags = args.value("flags", SEARCH_DOWN);
+
+    compiled_binpat_vec_t compiled;
+    qstring error_msg;
+
+    if (!parse_binpat_str(&compiled, start_ea, pattern.c_str(), 16, PBSENC_DEF1BPU, &error_msg)) {
+        throw std::runtime_error("Failed to parse pattern: " + std::string(error_msg.c_str()));
+    }
+
+    nlohmann::json matches = nlohmann::json::array();
+    int limit = args.value("limit", 100);
+
+    ea_t ea = start_ea;
+    for (int i = 0; i < limit; i++) {
+        ea = bin_search(ea, end_ea, compiled, flags);
+        if (ea == BADADDR) break;
+
+        matches.push_back(static_cast<uint64_t>(ea));
+        ea = next_head(ea, end_ea);
+        if (ea == BADADDR) break;
+    }
+
+    nlohmann::json result;
+    result["start_ea"] = static_cast<uint64_t>(start_ea);
+    result["pattern"] = pattern;
+    result["matches"] = matches;
+    result["count"] = matches.size();
+
+    return result;
+}
+
+inline nlohmann::json search_text(const nlohmann::json& args) {
+    if (!args.contains("start_ea") || !args.contains("text")) {
+        throw std::invalid_argument("Missing required parameters: start_ea, text");
+    }
+
+    ea_t start_ea = args["start_ea"];
+    std::string text = args["text"];
+    int flags = args.value("flags", SEARCH_DOWN);
+
+    ea_t found = find_text(start_ea, 0, 0, text.c_str(), flags);
+
+    nlohmann::json result;
+    result["start_ea"] = static_cast<uint64_t>(start_ea);
+    result["text"] = text;
+    result["found"] = (found != BADADDR);
+    if (found != BADADDR) {
+        result["address"] = static_cast<uint64_t>(found);
+    }
 
     return result;
 }
