@@ -377,6 +377,110 @@ static const std::vector<ToolDefinition> tool_definitions = {
         ida_mcp::decompile_function
     },
     {
+        "search_decompiled",
+        "Search for functions containing regex pattern in decompiled code",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"pattern", {{"type", "string"}, {"description", "Regex pattern to search for"}}},
+                    {"limit", {{"type", "integer"}, {"default", 100}, {"description", "Maximum number of results"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"pattern"})}
+        },
+        ida_mcp::search_decompiled
+    },
+    {
+        "search_disasm",
+        "Search for functions containing regex pattern in disassembly",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"pattern", {{"type", "string"}, {"description", "Regex pattern to search for"}}},
+                    {"limit", {{"type", "integer"}, {"default", 100}, {"description", "Maximum number of results"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"pattern"})}
+        },
+        ida_mcp::search_disasm
+    },
+    {
+        "get_objc_classes",
+        "Get Objective-C classes from the binary",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_objc_classes
+    },
+    {
+        "get_objc_selectors",
+        "Get Objective-C selectors from objc_msgSend calls",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_objc_selectors
+    },
+    {
+        "get_entitlements",
+        "Get iOS app entitlements",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_entitlements
+    },
+    {
+        "get_codesignature",
+        "Get code signature information",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_codesignature
+    },
+    {
+        "demangle_swift_symbols",
+        "Demangle Swift mangled symbol names",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"mangled_name", {{"type", "string"}, {"description", "Mangled Swift symbol name"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"mangled_name"})}
+        },
+        ida_mcp::demangle_swift_symbols
+    },
+    {
+        "get_macho_header",
+        "Get Mach-O file header information",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_macho_header
+    },
+    {
+        "get_framework_info",
+        "Get information about iOS frameworks used",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_framework_info
+    },
+    {
         "decompile_snippet",
         "Decompile arbitrary code range",
         {
@@ -1189,6 +1293,516 @@ static const std::vector<ToolDefinition> tool_definitions = {
         "Get full input file path",
         {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
         ida_mcp::get_input_file_path
+    },
+
+    // ===== Debugging Tools =====
+    {
+        "set_bpt",
+        "Set breakpoint at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"size", {{"type", "integer"}, {"default", 0}}},
+                    {"type", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::set_bpt
+    },
+    {
+        "del_bpt",
+        "Delete breakpoint at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::del_bpt
+    },
+    {
+        "enable_bpt",
+        "Enable or disable breakpoint",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"enable", {{"type", "boolean"}, {"default", true}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::enable_bpt
+    },
+    {
+        "get_bpt",
+        "Get breakpoint info at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_bpt
+    },
+    {
+        "get_thread_qty",
+        "Get number of threads",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_thread_qty
+    },
+    {
+        "get_threads",
+        "Get all threads",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_threads
+    },
+    {
+        "select_thread",
+        "Select active thread",
+        {
+            {"type", "object"},
+            {"properties", {{"thread_id", {{"type", "integer"}, {"description", "Thread ID"}}}}},
+            {"required", nlohmann::json::array({"thread_id"})}
+        },
+        ida_mcp::select_thread
+    },
+    {
+        "start_process",
+        "Start debugging process",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"path", {{"type", "string"}, {"default", ""}}},
+                    {"args", {{"type", "string"}, {"default", ""}}},
+                    {"working_dir", {{"type", "string"}, {"default", ""}}}
+                }
+            },
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::start_process
+    },
+    {
+        "exit_process",
+        "Exit debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::exit_process
+    },
+    {
+        "suspend_process",
+        "Suspend debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::suspend_process
+    },
+    {
+        "resume_process",
+        "Resume debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::resume_process
+    },
+    {
+        "step_into",
+        "Step into instruction",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_into
+    },
+    {
+        "step_over",
+        "Step over instruction",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_over
+    },
+    {
+        "step_until_ret",
+        "Step until return",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_until_ret
+    },
+
+    // ===== Function Modification Tools =====
+    {
+        "set_func_name",
+        "Rename function",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"name", {{"type", "string"}, {"description", "New name"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "name"})}
+        },
+        ida_mcp::set_func_name
+    },
+    {
+        "del_func",
+        "Delete function",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::del_func
+    },
+    {
+        "add_func",
+        "Create new function",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end", {{"type", "integer"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start"})}
+        },
+        ida_mcp::add_func
+    },
+    {
+        "set_func_start",
+        "Set function start address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"new_start", {{"type", "integer"}, {"description", "New start address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "new_start"})}
+        },
+        ida_mcp::set_func_start
+    },
+    {
+        "set_func_end",
+        "Set function end address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"new_end", {{"type", "integer"}, {"description", "New end address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "new_end"})}
+        },
+        ida_mcp::set_func_end
+    },
+    {
+        "reanalyze_function",
+        "Force function reanalysis",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::reanalyze_function
+    },
+
+    // ===== Cross-Reference Enhancement Tools =====
+    {
+        "add_cref",
+        "Add code cross-reference",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"from", {{"type", "integer"}, {"description", "Source address"}}},
+                    {"to", {{"type", "integer"}, {"description", "Target address"}}},
+                    {"type", {{"type", "integer"}, {"default", 16}}}
+                }
+            },
+            {"required", nlohmann::json::array({"from", "to"})}
+        },
+        ida_mcp::add_cref
+    },
+    {
+        "add_dref",
+        "Add data cross-reference",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"from", {{"type", "integer"}, {"description", "Source address"}}},
+                    {"to", {{"type", "integer"}, {"description", "Target address"}}},
+                    {"type", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"from", "to"})}
+        },
+        ida_mcp::add_dref
+    },
+    {
+        "del_cref",
+        "Delete code cross-reference",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"from", {{"type", "integer"}, {"description", "Source address"}}},
+                    {"to", {{"type", "integer"}, {"description", "Target address"}}},
+                    {"expand", {{"type", "boolean"}, {"default", true}}}
+                }
+            },
+            {"required", nlohmann::json::array({"from", "to"})}
+        },
+        ida_mcp::del_cref
+    },
+    {
+        "del_dref",
+        "Delete data cross-reference",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"from", {{"type", "integer"}, {"description", "Source address"}}},
+                    {"to", {{"type", "integer"}, {"description", "Target address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"from", "to"})}
+        },
+        ida_mcp::del_dref
+    },
+
+    // ===== Patching Tools =====
+    {
+        "patch_byte",
+        "Patch byte at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"value", {{"type", "integer"}, {"description", "Byte value"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "value"})}
+        },
+        ida_mcp::patch_byte
+    },
+    {
+        "patch_word",
+        "Patch word at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"value", {{"type", "integer"}, {"description", "Word value"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "value"})}
+        },
+        ida_mcp::patch_word
+    },
+    {
+        "patch_dword",
+        "Patch dword at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"value", {{"type", "integer"}, {"description", "Dword value"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "value"})}
+        },
+        ida_mcp::patch_dword
+    },
+    {
+        "patch_qword",
+        "Patch qword at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"value", {{"type", "integer"}, {"description", "Qword value"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "value"})}
+        },
+        ida_mcp::patch_qword
+    },
+    {
+        "get_original_byte",
+        "Get original byte value",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_original_byte
+    },
+    {
+        "revert_byte",
+        "Revert byte to original",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::revert_byte
+    },
+    {
+        "visit_patched_bytes",
+        "Get all patched bytes in range",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"default", 0}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"limit", {{"type", "integer"}, {"default", 1000}}}
+                }
+            },
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::visit_patched_bytes
+    },
+
+    // ===== Search Enhancement Tools =====
+    {
+        "find_binary_ex",
+        "Enhanced binary pattern search",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"pattern", {{"type", "string"}, {"description", "Binary pattern"}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "pattern"})}
+        },
+        ida_mcp::find_binary_ex
+    },
+    {
+        "find_text_ex",
+        "Enhanced text search",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"text", {{"type", "string"}, {"description", "Search text"}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "text"})}
+        },
+        ida_mcp::find_text_ex
+    },
+    {
+        "find_all_text",
+        "Find all occurrences of text",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"text", {{"type", "string"}, {"description", "Search text"}}},
+                    {"start_ea", {{"type", "integer"}, {"default", 0}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"limit", {{"type", "integer"}, {"default", 100}}},
+                    {"flags", {{"type", "integer"}, {"default", 1}}}
+                }
+            },
+            {"required", nlohmann::json::array({"text"})}
+        },
+        ida_mcp::find_all_text
+    },
+    {
+        "find_next_addr",
+        "Find next defined address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::find_next_addr
+    },
+
+
+
+    // ===== Disassembly Output Tools =====
+    {
+        "gen_disasm_text",
+        "Generate disassembly text for range",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_ea", {{"type", "integer"}, {"description", "End address"}}},
+                    {"as_stack", {{"type", "boolean"}, {"default", false}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "end_ea"})}
+        },
+        ida_mcp::gen_disasm_text
+    },
+    {
+        "tag_remove",
+        "Remove color tags from text",
+        {
+            {"type", "object"},
+            {"properties", {{"text", {{"type", "string"}, {"description", "Text with tags"}}}}},
+            {"required", nlohmann::json::array({"text"})}
+        },
+        ida_mcp::tag_remove
+    },
+    {
+        "generate_disasm_file",
+        "Export disassembly to file",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"path", {{"type", "string"}, {"description", "Output file path"}}},
+                    {"start_ea", {{"type", "integer"}}},
+                    {"end_ea", {{"type", "integer"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"path"})}
+        },
+        ida_mcp::generate_disasm_file
+    },
+
+    // ===== Plugin/Processor Info Tools =====
+    {
+        "get_idp_name",
+        "Get processor name",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_idp_name
+    },
+    {
+        "get_abi_name",
+        "Get ABI/calling convention name",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_abi_name
+    },
+    {
+        "get_plugin_options",
+        "Get plugin options",
+        {
+            {"type", "object"},
+            {"properties", {{"plugin_name", {{"type", "string"}, {"description", "Plugin name"}}}}},
+            {"required", nlohmann::json::array({"plugin_name"})}
+        },
+        ida_mcp::get_plugin_options
     }
 };
 

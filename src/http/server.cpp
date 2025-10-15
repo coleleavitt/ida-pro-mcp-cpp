@@ -158,12 +158,17 @@ void McpServer::server_thread_func() {
                     result = handle_tools_list(params);
                 } else if (method == "tools/call") {
                     result = handle_tool_call(params);
-                } else if (method == "notifications/initialized") {
-                    msg("[IDA MCP] Client initialized\n");
-                    res.status = 200;
-                    res.set_content("", "application/json");
-                    return;
-                } else {
+                 } else if (method == "notifications/initialized") {
+                     msg("[IDA MCP] Client initialized\n");
+                     res.status = 200;
+                     res.set_content("", "application/json");
+                     return;
+                 } else if (method == "notifications/cancelled") {
+                     msg("[IDA MCP] Request cancelled by client\n");
+                     res.status = 200;
+                     res.set_content("", "application/json");
+                     return;
+                 } else {
                     msg("[IDA MCP] Unknown method: %s\n", method.c_str());
                     res.status = 400;
                     nlohmann::json error_response;
