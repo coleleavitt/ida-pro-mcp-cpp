@@ -142,7 +142,21 @@ endif()
 # Installation
 #=============================================================================
 
-# Install to IDA plugins directory (optional)
+# Install to user IDA plugins directory (~/.idapro/plugins)
+install(TARGETS ${PROJECT_NAME}
+        LIBRARY DESTINATION "$ENV{HOME}/.idapro/plugins"
+        OPTIONAL
+)
+
+# Install to specific IDA installation directory (if it exists)
+set(IDA_SPECIFIC_DIR "$ENV{HOME}/Downloads/Software/IDAPro/ida-pro-9.1/plugins")
+if(EXISTS "${IDA_SPECIFIC_DIR}")
+    install(TARGETS ${PROJECT_NAME}
+            LIBRARY DESTINATION "${IDA_SPECIFIC_DIR}"
+    )
+endif()
+
+# Install to custom IDA plugins directory (optional)
 if(DEFINED IDA_INSTALL_DIR)
     install(TARGETS ${PROJECT_NAME}
             LIBRARY DESTINATION "${IDA_INSTALL_DIR}/plugins"
