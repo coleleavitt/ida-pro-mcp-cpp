@@ -22,6 +22,9 @@
 #include <nalt.hpp>
 #include <entry.hpp>
 #include <search.hpp>
+#include <fixup.hpp>
+#include <jumptable.hpp>
+#include <demangle.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -2441,6 +2444,409 @@ inline nlohmann::json search_text(const nlohmann::json& args) {
     if (found != BADADDR) {
         result["address"] = static_cast<uint64_t>(found);
     }
+
+    return result;
+}
+
+// ===== Fixups/Relocations Tools =====
+
+inline nlohmann::json get_fixup(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    fixup_data_t fd;
+    if (!get_fixup(&fd, address)) {
+        throw std::runtime_error("No fixup at address");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["type"] = fd.get_type();
+    result["flags"] = fd.get_flags();
+    result["displacement"] = static_cast<int64_t>(fd.displacement);
+    result["sel"] = fd.sel;
+    result["off"] = static_cast<uint64_t>(fd.off);
+
+    return result;
+}
+
+inline nlohmann::json get_all_fixups(const nlohmann::json& args) {
+    ea_t start_ea = args.value("start_ea", 0);
+    ea_t end_ea = args.value("end_ea", BADADDR);
+
+    nlohmann::json fixups = nlohmann::json::array();
+
+    ea_t ea = start_ea;
+    fixup_data_t fd;
+    while ((ea = get_next_fixup_ea(ea)) != BADADDR && ea < end_ea) {
+        if (get_fixup(&fd, ea)) {
+            nlohmann::json fixup;
+            fixup["address"] = static_cast<uint64_t>(ea);
+            fixup["type"] = fd.get_type();
+            fixup["flags"] = fd.get_flags();
+            fixup["displacement"] = static_cast<int64_t>(fd.displacement);
+            fixup["sel"] = fd.sel;
+            fixup["off"] = static_cast<uint64_t>(fd.off);
+
+            fixups.push_back(fixup);
+        }
+    }
+
+    nlohmann::json result;
+    result["fixups"] = fixups;
+    result["count"] = fixups.size();
+
+    return result;
+}
+
+inline nlohmann::json contains_fixups(const nlohmann::json& args) {
+    if (!args.contains("start_ea") || !args.contains("end_ea")) {
+        throw std::invalid_argument("Missing required parameters: start_ea, end_ea");
+    }
+
+    ea_t start_ea = args["start_ea"];
+    ea_t end_ea = args["end_ea"];
+
+    bool has_fixups = ::contains_fixups(start_ea, end_ea - start_ea);
+
+    nlohmann::json result;
+    result["start_ea"] = static_cast<uint64_t>(start_ea);
+    result["end_ea"] = static_cast<uint64_t>(end_ea);
+    result["has_fixups"] = has_fixups;
+
+    return result;
+}
+
+// ===== Jump Tables Tools =====
+
+inline nlohmann::json get_jump_table(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    switch_info_t si;
+    if (!get_switch_info(&si, address)) {
+        throw std::runtime_error("No switch info at address");
+    }
+
+    nlohmann::json cases = nlohmann::json::array();
+    for (int i = 0; i < si.get_jtable_size(); i++) {
+        ea_t target = get_jtable_target(address, si, i);
+        if (target != BADADDR) {
+            cases.push_back(static_cast<uint64_t>(target));
+        }
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["ncases"] = si.get_jtable_size();
+    result["jumps"] = static_cast<uint64_t>(si.jumps);
+    result["cases"] = cases;
+
+    return result;
+}
+
+inline nlohmann::json get_switch_info(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    switch_info_t si;
+    if (!get_switch_info(&si, address)) {
+        throw std::runtime_error("No switch info at address");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["flags"] = si.flags;
+    result["ncases"] = si.get_jtable_size();
+    result["jumps"] = static_cast<uint64_t>(si.jumps);
+    result["lowcase"] = static_cast<int64_t>(si.lowcase);
+    result["startea"] = static_cast<uint64_t>(si.startea);
+
+    return result;
+}
+
+// ===== Advanced Demangling Tools =====
+
+inline nlohmann::json demangle_name(const nlohmann::json& args) {
+    if (!args.contains("name")) {
+        throw std::invalid_argument("Missing required parameter: name");
+    }
+
+    std::string name = args["name"];
+    int flags = args.value("flags", 0);
+
+    qstring demangled;
+    int result_code = ::demangle_name(&demangled, name.c_str(), flags);
+
+    nlohmann::json result;
+    result["name"] = name;
+    result["demangled"] = demangled.c_str();
+    result["success"] = (result_code >= 0);
+
+    return result;
+}
+
+inline nlohmann::json demangle_type(const nlohmann::json& args) {
+    if (!args.contains("type_string")) {
+        throw std::invalid_argument("Missing required parameter: type_string");
+    }
+
+    std::string type_string = args["type_string"];
+    bool short_form = args.value("short_form", false);
+
+    qstring demangled;
+    int result_code = ::demangle_name(&demangled, type_string.c_str(), short_form ? MNG_SHORT_FORM : 0);
+
+    nlohmann::json result;
+    result["type_string"] = type_string;
+    result["demangled"] = demangled.c_str();
+    result["success"] = (result_code >= 0);
+
+    return result;
+}
+
+// ===== Operand Analysis Tools =====
+
+inline nlohmann::json get_operand_type(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("operand_index")) {
+        throw std::invalid_argument("Missing required parameters: address, operand_index");
+    }
+
+    ea_t address = args["address"];
+    int operand_index = args["operand_index"];
+
+    insn_t insn;
+    if (decode_insn(&insn, address) == 0) {
+        throw std::runtime_error("Failed to decode instruction");
+    }
+
+    if (operand_index < 0 || operand_index >= UA_MAXOP) {
+        throw std::invalid_argument("Invalid operand index");
+    }
+
+    const op_t& op = insn.ops[operand_index];
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["operand_index"] = operand_index;
+    result["type"] = op.type;
+    result["dtype"] = op.dtype;
+    result["flags"] = op.flags;
+
+    if (op.type == o_reg) {
+        result["reg"] = op.reg;
+    } else if (op.type == o_imm) {
+        result["value"] = static_cast<uint64_t>(op.value);
+    } else if (op.type == o_mem || op.type == o_near || op.type == o_far) {
+        result["addr"] = static_cast<uint64_t>(op.addr);
+    } else if (op.type == o_displ) {
+        result["addr"] = static_cast<uint64_t>(op.addr);
+        result["phrase"] = op.phrase;
+    }
+
+    return result;
+}
+
+inline nlohmann::json get_operand_value(const nlohmann::json& args) {
+    if (!args.contains("address") || !args.contains("operand_index")) {
+        throw std::invalid_argument("Missing required parameters: address, operand_index");
+    }
+
+    ea_t address = args["address"];
+    int operand_index = args["operand_index"];
+
+    insn_t insn;
+    if (decode_insn(&insn, address) == 0) {
+        throw std::runtime_error("Failed to decode instruction");
+    }
+
+    if (operand_index < 0 || operand_index >= UA_MAXOP) {
+        throw std::invalid_argument("Invalid operand index");
+    }
+
+    uval_t value = insn.ops[operand_index].value;
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["operand_index"] = operand_index;
+    result["value"] = static_cast<uint64_t>(value);
+
+    return result;
+}
+
+inline nlohmann::json get_canon_feature(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    insn_t insn;
+    if (decode_insn(&insn, address) == 0) {
+        throw std::runtime_error("Failed to decode instruction");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["itype"] = insn.itype;
+    result["size"] = insn.size;
+    result["feature"] = insn.get_canon_feature(PH);
+
+    return result;
+}
+
+// ===== Data Analysis Tools =====
+
+inline nlohmann::json get_data_type(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    flags64_t flags = get_flags(address);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["is_byte"] = is_byte(flags);
+    result["is_word"] = is_word(flags);
+    result["is_dword"] = is_dword(flags);
+    result["is_qword"] = is_qword(flags);
+    result["is_oword"] = is_oword(flags);
+    result["is_float"] = is_float(flags);
+    result["is_double"] = is_double(flags);
+    result["is_strlit"] = is_strlit(flags);
+    result["is_struct"] = is_struct(flags);
+    result["is_align"] = is_align(flags);
+
+    return result;
+}
+
+inline nlohmann::json get_array_info(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    array_parameters_t ar;
+    if (!get_array_parameters(&ar, address)) {
+        throw std::runtime_error("No array at address");
+    }
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["flags"] = ar.flags;
+    result["lineitems"] = ar.lineitems;
+    result["alignment"] = ar.alignment;
+
+    return result;
+}
+
+inline nlohmann::json get_struc_id(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    tid_t struc_id = get_strid(address);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["struc_id"] = static_cast<uint64_t>(struc_id);
+    result["has_struct"] = (struc_id != BADADDR);
+
+    return result;
+}
+
+inline nlohmann::json is_code(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    flags64_t flags = get_flags(address);
+    bool code = ::is_code(flags);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["is_code"] = code;
+
+    return result;
+}
+
+inline nlohmann::json is_data(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    flags64_t flags = get_flags(address);
+    bool data = ::is_data(flags);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["is_data"] = data;
+
+    return result;
+}
+
+inline nlohmann::json is_unknown(const nlohmann::json& args) {
+    if (!args.contains("address")) {
+        throw std::invalid_argument("Missing required parameter: address");
+    }
+
+    ea_t address = args["address"];
+
+    flags64_t flags = get_flags(address);
+    bool unknown = ::is_unknown(flags);
+
+    nlohmann::json result;
+    result["address"] = static_cast<uint64_t>(address);
+    result["is_unknown"] = unknown;
+
+    return result;
+}
+
+// ===== Database Metadata Tools =====
+
+inline nlohmann::json get_imagebase(const nlohmann::json& args) {
+    ea_t imagebase = ::get_imagebase();
+
+    nlohmann::json result;
+    result["imagebase"] = static_cast<uint64_t>(imagebase);
+
+    return result;
+}
+
+inline nlohmann::json get_root_filename(const nlohmann::json& args) {
+    char buf[QMAXPATH];
+    ::get_root_filename(buf, sizeof(buf));
+
+    nlohmann::json result;
+    result["filename"] = buf;
+
+    return result;
+}
+
+inline nlohmann::json get_input_file_path(const nlohmann::json& args) {
+    char buf[QMAXPATH];
+    ::get_input_file_path(buf, sizeof(buf));
+
+    nlohmann::json result;
+    result["path"] = buf;
 
     return result;
 }

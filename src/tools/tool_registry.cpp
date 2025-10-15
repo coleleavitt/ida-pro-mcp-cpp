@@ -968,6 +968,227 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"start_ea", "text"})}
         },
         ida_mcp::search_text
+    },
+
+    // ===== Fixups/Relocations Tools =====
+    {
+        "get_fixup",
+        "Get fixup/relocation at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_fixup
+    },
+    {
+        "get_all_fixups",
+        "Get all fixups in range",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_ea", {{"type", "integer"}, {"description", "End address"}}},
+                    {"limit", {{"type", "integer"}, {"default", 1000}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "end_ea"})}
+        },
+        ida_mcp::get_all_fixups
+    },
+    {
+        "contains_fixups",
+        "Check if range contains fixups",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_ea", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_ea", {{"type", "integer"}, {"description", "End address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_ea", "end_ea"})}
+        },
+        ida_mcp::contains_fixups
+    },
+
+    // ===== Jump Tables Tools =====
+    {
+        "get_jump_table",
+        "Get jump table at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Jump table address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_jump_table
+    },
+    {
+        "get_switch_info",
+        "Get switch statement info",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Switch instruction address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_switch_info
+    },
+
+    // ===== Advanced Demangling Tools =====
+    {
+        "demangle_name",
+        "Demangle C++/Objective-C name",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"name", {{"type", "string"}, {"description", "Mangled name"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::demangle_name
+    },
+    {
+        "demangle_type",
+        "Demangle type string",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"type_string", {{"type", "string"}, {"description", "Mangled type"}}},
+                    {"flags", {{"type", "integer"}, {"default", 0}}}
+                }
+            },
+            {"required", nlohmann::json::array({"type_string"})}
+        },
+        ida_mcp::demangle_type
+    },
+
+    // ===== Operand Analysis Tools =====
+    {
+        "get_operand_type",
+        "Get instruction operand type",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                    {"operand_num", {{"type", "integer"}, {"description", "Operand number"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "operand_num"})}
+        },
+        ida_mcp::get_operand_type
+    },
+    {
+        "get_operand_value",
+        "Get instruction operand value",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                    {"operand_num", {{"type", "integer"}, {"description", "Operand number"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "operand_num"})}
+        },
+        ida_mcp::get_operand_value
+    },
+    {
+        "get_canon_feature",
+        "Get canonical instruction features",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Instruction address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_canon_feature
+    },
+
+    // ===== Data Analysis Tools =====
+    {
+        "get_data_type",
+        "Get data type at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_data_type
+    },
+    {
+        "get_array_info",
+        "Get array information",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Array address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_array_info
+    },
+    {
+        "get_struc_id",
+        "Get structure ID at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_struc_id
+    },
+    {
+        "is_code",
+        "Check if address contains code",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_code
+    },
+    {
+        "is_data",
+        "Check if address contains data",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_data
+    },
+    {
+        "is_unknown",
+        "Check if address is unexplored",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_unknown
+    },
+
+    // ===== Database Metadata Tools =====
+    {
+        "get_imagebase",
+        "Get image base address",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_imagebase
+    },
+    {
+        "get_root_filename",
+        "Get root filename without path",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_root_filename
+    },
+    {
+        "get_input_file_path",
+        "Get full input file path",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_input_file_path
     }
 };
 
