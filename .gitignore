@@ -24,3 +24,5 @@ Makefile
 .DS_Store
 .directory
 *~
+
+.claude

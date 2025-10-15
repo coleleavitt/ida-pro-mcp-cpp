@@ -101,10 +101,6 @@ set(PLUGIN_SOURCES
     src/http/auth.cpp
     src/http/handlers.cpp
     src/http/server.cpp
-    src/tools/database_info.cpp
-    src/tools/list_functions.cpp
-    src/tools/get_function_at.cpp
-    src/tools/read_bytes.cpp
     src/tools/tool_registry.cpp
 )
 

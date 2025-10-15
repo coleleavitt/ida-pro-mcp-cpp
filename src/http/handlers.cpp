@@ -1,17 +1,6 @@
 #include "http/handlers.hpp"
 #include "tools/tool_registry.hpp"
 
-nlohmann::json handle_initialize(const nlohmann::json &params) {
-    nlohmann::json response;
-    response["protocolVersion"] = "2024-11-05";
-    response["serverInfo"] = {
-        {"name", "ida-pro-mcp-server"},
-        {"version", "1.0.0"}
-    };
-    response["capabilities"] = {
-        {"tools", nlohmann::json::object()}
-    };
-
 #define DONT_DEFINE_HEXRAYS 1
 #include <ida.hpp>
 
@@ -26,6 +15,17 @@ nlohmann::json handle_initialize(const nlohmann::json &params) {
 #endif
 
 #include <kernwin.hpp>
+
+nlohmann::json handle_initialize(const nlohmann::json &params) {
+    nlohmann::json response;
+    response["protocolVersion"] = "2024-11-05";
+    response["serverInfo"] = {
+        {"name", "ida-pro-mcp-server"},
+        {"version", "1.0.0"}
+    };
+    response["capabilities"] = {
+        {"tools", nlohmann::json::object()}
+    };
 
     msg("[IDA MCP] Received initialize request\n");
     msg("[IDA MCP] Responding with capabilities: tools\n");
