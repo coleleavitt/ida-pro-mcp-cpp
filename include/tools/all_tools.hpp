@@ -4,6 +4,7 @@
 #include "../common/ida_helpers.hpp"
 
 #include <regex>
+#include <cstdlib>
 #include <ida.hpp>
 #include <idp.hpp>
 #include <loader.hpp>
@@ -41,6 +42,7 @@
 #endif
 
 #include <kernwin.hpp>
+#include <expr.hpp>
 
 // Namespace for all tool implementation functions
 namespace ida_mcp {
@@ -3545,19 +3547,36 @@ namespace ida_mcp {
 
     // ===== Patching Tools =====
 
+    // Helper function to parse value from JSON (supports both integer and hex string)
+    inline uint64_t parse_patch_value(const nlohmann::json &value_json) {
+        if (value_json.is_number()) {
+            return value_json.get<uint64_t>();
+        } else if (value_json.is_string()) {
+            std::string value_str = value_json.get<std::string>();
+            char *end;
+            uint64_t value = std::strtoull(value_str.c_str(), &end, 0);
+            if (end == value_str.c_str() || *end != '\0') {
+                throw std::invalid_argument("Invalid value format: " + value_str);
+            }
+            return value;
+        } else {
+            throw std::invalid_argument("Value must be an integer or hex string");
+        }
+    }
+
     inline nlohmann::json patch_byte(const nlohmann::json &args) {
         if (!args.contains("address") || !args.contains("value")) {
             throw std::invalid_argument("Missing required parameters: address, value");
         }
 
         ea_t address = args["address"];
-        uint8_t value = args["value"];
+        uint64_t value = parse_patch_value(args["value"]);
 
         ::patch_byte(address, value);
 
         nlohmann::json result;
         result["address"] = static_cast<uint64_t>(address);
-        result["value"] = value;
+        result["value"] = static_cast<uint64_t>(value & 0xFF);
         result["success"] = true;
 
         return result;
@@ -3569,13 +3588,13 @@ namespace ida_mcp {
         }
 
         ea_t address = args["address"];
-        uint16_t value = args["value"];
+        uint64_t value = parse_patch_value(args["value"]);
 
         ::patch_word(address, value);
 
         nlohmann::json result;
         result["address"] = static_cast<uint64_t>(address);
-        result["value"] = value;
+        result["value"] = static_cast<uint64_t>(value & 0xFFFF);
         result["success"] = true;
 
         return result;
@@ -3587,13 +3606,13 @@ namespace ida_mcp {
         }
 
         ea_t address = args["address"];
-        uint32_t value = args["value"];
+        uint64_t value = parse_patch_value(args["value"]);
 
         ::patch_dword(address, value);
 
         nlohmann::json result;
         result["address"] = static_cast<uint64_t>(address);
-        result["value"] = value;
+        result["value"] = static_cast<uint64_t>(value & 0xFFFFFFFF);
         result["success"] = true;
 
         return result;
@@ -3605,13 +3624,13 @@ namespace ida_mcp {
         }
 
         ea_t address = args["address"];
-        uint64_t value = args["value"];
+        uint64_t value = parse_patch_value(args["value"]);
 
         ::patch_qword(address, value);
 
         nlohmann::json result;
         result["address"] = static_cast<uint64_t>(address);
-        result["value"] = static_cast<uint64_t>(value);
+        result["value"] = value;
         result["success"] = true;
 
         return result;
@@ -3900,4 +3919,157 @@ namespace ida_mcp {
 
         return result;
     }
+
+    // ===== Script Execution Tools =====
+
+    inline nlohmann::json execute_idc_script(const nlohmann::json &args) {
+        if (!args.contains("script_path")) {
+            throw std::invalid_argument("Missing required parameter: script_path");
+        }
+
+        std::string script_path = args["script_path"];
+        std::string function_name = args.value("function_name", "main");
+
+        qstring errbuf;
+        if (!qfileexist(script_path.c_str())) {
+            throw std::runtime_error("Script file does not exist: " + script_path);
+        }
+
+        // Compile the IDC script
+        if (!compile_idc_file(script_path.c_str(), &errbuf)) {
+            throw std::runtime_error("Failed to compile IDC script: " + std::string(errbuf.c_str()));
+        }
+
+        // Call the specified function
+        if (!call_idc_func(nullptr, function_name.c_str(), nullptr, 0, &errbuf)) {
+            throw std::runtime_error("Failed to call IDC function '" + function_name + "': " + std::string(errbuf.c_str()));
+        }
+
+        nlohmann::json result;
+        result["script_path"] = script_path;
+        result["function_name"] = function_name;
+        result["success"] = true;
+
+        return result;
+    }
+
+    inline nlohmann::json execute_python_script(const nlohmann::json &args) {
+        if (!args.contains("script_path")) {
+            throw std::invalid_argument("Missing required parameter: script_path");
+        }
+
+        std::string script_path = args["script_path"];
+        std::string script_args = args.value("args", "");
+
+        if (!qfileexist(script_path.c_str())) {
+            throw std::runtime_error("Script file does not exist: " + script_path);
+        }
+
+        // Get Python extension language
+        const char *ext = get_file_ext(script_path.c_str());
+        const extlang_object_t el = find_extlang_by_ext(ext);
+        if (!el || !el->compile_file) {
+            throw std::runtime_error("Python extension not available or file is not a Python script");
+        }
+
+        qstring errbuf;
+
+        // If we have arguments, prepend code to set sys.argv
+        if (!script_args.empty()) {
+            qstrvec_t script_args_vec;
+            if (!parse_command_line(&script_args_vec, nullptr, script_args.c_str(), 0)) {
+                throw std::runtime_error("Failed to parse script arguments");
+            }
+
+            qstring script_code = "import sys\n";
+            script_code += qstring("sys.argv = ['") + script_path.c_str() + qstring("']\n");
+            for (const auto &arg : script_args_vec) {
+                script_code += qstring("sys.argv.append('") + arg + qstring("')\n");
+            }
+
+            // Read the script file and prepend our argv setup
+            FILE *py_script_file = qfopen(script_path.c_str(), "r");
+            if (!py_script_file) {
+                throw std::runtime_error("Could not read script file: " + script_path);
+            }
+
+            char buf[4096];
+            while (true) {
+                char *rv = qfgets(buf, sizeof(buf), py_script_file);
+                if (rv == nullptr) break;
+
+                size_t line_len = strlen(buf);
+                if (line_len > 0 && buf[line_len-1] == '\n') {
+                    buf[line_len-1] = 0;
+                }
+
+                script_code += qstring(buf) + "\n";
+            }
+            qfclose(py_script_file);
+
+            if (!el->eval_snippet(script_code.c_str(), &errbuf)) {
+                throw std::runtime_error("Failed to execute Python script with arguments: " + std::string(errbuf.c_str()));
+            }
+        } else {
+            // Execute without arguments
+            if (!el->compile_file(script_path.c_str(), nullptr, &errbuf)) {
+                throw std::runtime_error("Failed to execute Python script: " + std::string(errbuf.c_str()));
+            }
+        }
+
+        nlohmann::json result;
+        result["script_path"] = script_path;
+        result["args"] = script_args;
+        result["success"] = true;
+
+        return result;
+    }
+
+    inline nlohmann::json eval_python_code(const nlohmann::json &args) {
+        if (!args.contains("code")) {
+            throw std::invalid_argument("Missing required parameter: code");
+        }
+
+        std::string code = args["code"];
+        std::string script_args = args.value("args", "");
+
+        // Get Python extension language
+        const extlang_object_t el = find_extlang_by_ext("py");
+        if (!el || !el->eval_snippet) {
+            throw std::runtime_error("Python extension not available");
+        }
+
+        qstring errbuf;
+
+        // If we have arguments, prepend code to set sys.argv
+        if (!script_args.empty()) {
+            qstrvec_t script_args_vec;
+            if (!parse_command_line(&script_args_vec, nullptr, script_args.c_str(), 0)) {
+                throw std::runtime_error("Failed to parse script arguments");
+            }
+
+            qstring script_code = "import sys\n";
+            script_code += "sys.argv = ['<eval>']\n";
+            for (const auto &arg : script_args_vec) {
+                script_code += qstring("sys.argv.append('") + arg + qstring("')\n");
+            }
+            script_code += code.c_str();
+
+            if (!el->eval_snippet(script_code.c_str(), &errbuf)) {
+                throw std::runtime_error("Failed to evaluate Python code with arguments: " + std::string(errbuf.c_str()));
+            }
+        } else {
+            if (!el->eval_snippet(code.c_str(), &errbuf)) {
+                throw std::runtime_error("Failed to evaluate Python code: " + std::string(errbuf.c_str()));
+            }
+        }
+
+        nlohmann::json result;
+        result["code"] = code;
+        result["args"] = script_args;
+        result["success"] = true;
+
+        return result;
+    }
+
 } // namespace ida_mcp

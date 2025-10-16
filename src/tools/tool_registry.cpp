@@ -509,10 +509,12 @@ static const std::vector<ToolDefinition> tool_definitions = {
                         {
                             {"type", "string"},
                             {"default", "MMAT_GLBOPT3"},
-                            {"enum", nlohmann::json::array({
-                                "MMAT_GENERATED", "MMAT_PREOPTIMIZED", "MMAT_LOCOPT",
-                                "MMAT_CALLS", "MMAT_GLBOPT1", "MMAT_GLBOPT2", "MMAT_GLBOPT3"
-                            })},
+                            {
+                                "enum", nlohmann::json::array({
+                                    "MMAT_GENERATED", "MMAT_PREOPTIMIZED", "MMAT_LOCOPT",
+                                    "MMAT_CALLS", "MMAT_GLBOPT1", "MMAT_GLBOPT2", "MMAT_GLBOPT3"
+                                })
+                            },
                             {"description", "Microcode maturity level"}
                         }
                     }
@@ -753,7 +755,14 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"declarations", {{"type", "string"}, {"description", "Type declarations"}}},
-                    {"language", {{"type", "string"}, {"enum", nlohmann::json::array({"C", "C++", "CPP", "OBJC", "Objective-C"})}, {"default", "C"}}}
+                    {
+                        "language",
+                        {
+                            {"type", "string"},
+                            {"enum", nlohmann::json::array({"C", "C++", "CPP", "OBJC", "Objective-C"})},
+                            {"default", "C"}
+                        }
+                    }
                 }
             },
             {"required", nlohmann::json::array({"declarations"})}
@@ -1582,7 +1591,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"value", {{"type", "integer"}, {"description", "Byte value"}}}
+                    {"value", {{"description", "Byte value (integer or hex string like '0xFF')"}}}
                 }
             },
             {"required", nlohmann::json::array({"address", "value"})}
@@ -1597,7 +1606,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"value", {{"type", "integer"}, {"description", "Word value"}}}
+                    {"value", {{"description", "Word value (integer or hex string like '0xFFFF')"}}}
                 }
             },
             {"required", nlohmann::json::array({"address", "value"})}
@@ -1612,7 +1621,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"value", {{"type", "integer"}, {"description", "Dword value"}}}
+                    {"value", {{"description", "Dword value (integer or hex string like '0x14003A3E')"}}}
                 }
             },
             {"required", nlohmann::json::array({"address", "value"})}
@@ -1627,7 +1636,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"value", {{"type", "integer"}, {"description", "Qword value"}}}
+                    {"value", {{"description", "Qword value (integer or hex string like '0xD65F03C0')"}}}
                 }
             },
             {"required", nlohmann::json::array({"address", "value"})}
@@ -1735,7 +1744,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
     },
 
 
-
     // ===== Disassembly Output Tools =====
     {
         "gen_disasm_text",
@@ -1803,6 +1811,56 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"plugin_name"})}
         },
         ida_mcp::get_plugin_options
+    },
+
+    // ===== Script Execution Tools =====
+    {
+        "execute_idc_script",
+        "Execute an IDC script file",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"script_path", {{"type", "string"}, {"description", "Path to IDC script file"}}},
+                    {
+                        "function_name",
+                        {{"type", "string"}, {"default", "main"}, {"description", "Function to call (default: main)"}}
+                    }
+                }
+            },
+            {"required", nlohmann::json::array({"script_path"})}
+        },
+        ida_mcp::execute_idc_script
+    },
+    {
+        "execute_python_script",
+        "Execute a Python script file",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"script_path", {{"type", "string"}, {"description", "Path to Python script file"}}},
+                    {"args", {{"type", "string"}, {"description", "Arguments to pass to script"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"script_path"})}
+        },
+        ida_mcp::execute_python_script
+    },
+    {
+        "eval_python_code",
+        "Evaluate Python code string",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"code", {{"type", "string"}, {"description", "Python code to execute"}}},
+                    {"args", {{"type", "string"}, {"description", "Arguments to pass"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"code"})}
+        },
+        ida_mcp::eval_python_code
     }
 };
 
