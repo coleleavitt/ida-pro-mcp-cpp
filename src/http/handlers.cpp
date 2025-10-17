@@ -18,7 +18,7 @@
 
 nlohmann::json handle_initialize(const nlohmann::json &params) {
     nlohmann::json response;
-    response["protocolVersion"] = "2024-11-05";
+    response["protocolVersion"] = "2025-06-18";
     response["serverInfo"] = {
         {"name", "ida-pro-mcp-server"},
         {"version", "1.0.0"}
