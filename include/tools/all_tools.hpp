@@ -129,8 +129,8 @@ namespace ida_mcp {
         ea_t address = args["address"];
         int size = args["size"];
 
-        if (size > 1024) {
-            throw std::runtime_error("Size exceeds maximum of 1024 bytes");
+        if (size > 16384) {
+            throw std::runtime_error("Size exceeds maximum of 16384 bytes");
         }
 
         std::vector<uint8_t> buffer(size);

@@ -66,7 +66,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Address to read from"}}},
-                    {"size", {{"type", "integer"}, {"description", "Number of bytes (max 1024)"}}}
+                    {"size", {{"type", "integer"}, {"description", "Number of bytes (max 16384)"}}}
                 }
             },
             {"required", nlohmann::json::array({"address", "size"})}
