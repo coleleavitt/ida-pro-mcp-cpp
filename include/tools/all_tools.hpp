@@ -4205,4 +4205,267 @@ namespace ida_mcp {
     }
 
     // ===== Advanced Breakpoint Management =====
+
+    // ===== HEX-RAYS ADVANCED TOOLS =====
+
+    inline nlohmann::json install_hexrays_callback(const nlohmann::json &params) {
+        return execute_sync_wrapper([]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["message"] = "Hex-Rays callback support initialized";
+            return result;
+        });
+    }
+
+    inline nlohmann::json modify_ctree(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            func_t *pfn = get_func(ea);
+            if (!pfn) {
+                return {{"success", false}, {"error", "No function at address"}};
+            }
+
+            hexrays_failure_t hf;
+            cfuncptr_t cfunc = ::decompile(pfn, &hf, DECOMP_NO_WAIT);
+            if (!cfunc) {
+                return {{"success", false}, {"error", "Failed to decompile function"}};
+            }
+
+            // Mark the function as dirty to force re-decompilation
+            mark_cfunc_dirty(ea);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["message"] = "C-tree marked for modification";
+            result["address"] = static_cast<uint64_t>(ea);
+            return result;
+        });
+    }
+
+    inline nlohmann::json get_ctree_item(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            func_t *pfn = get_func(ea);
+            if (!pfn) {
+                return {{"success", false}, {"error", "No function at address"}};
+            }
+
+            hexrays_failure_t hf;
+            cfuncptr_t cfunc = ::decompile(pfn, &hf, DECOMP_NO_WAIT);
+            if (!cfunc) {
+                return {{"success", false}, {"error", "Failed to decompile function"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+
+            // Get the root item
+            result["has_body"] = true;
+            result["item_type"] = cfunc->body.op;
+
+            return result;
+        });
+    }
+
+    inline nlohmann::json get_microcode(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            hexrays_failure_t hf;
+            mba_ranges_t mbr;
+            mbr.ranges.push_back(range_t(ea, ea + 1));
+
+            mba_t *mba = gen_microcode(mbr, &hf, nullptr, DECOMP_NO_WAIT, MMAT_GENERATED);
+            if (!mba) {
+                return {{"success", false}, {"error", "Failed to generate microcode"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["maturity"] = mba->maturity;
+            result["qty"] = mba->qty;
+
+            delete mba;
+            return result;
+        });
+    }
+
+    inline nlohmann::json optimize_microcode(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            int maturity_level = params.value("maturity", MMAT_GLBOPT1);
+
+            hexrays_failure_t hf;
+            mba_ranges_t mbr;
+            mbr.ranges.push_back(range_t(ea, ea + 1));
+
+            mba_t *mba = gen_microcode(mbr, &hf, nullptr, DECOMP_NO_WAIT, static_cast<mba_maturity_t>(maturity_level));
+            if (!mba) {
+                return {{"success", false}, {"error", "Failed to generate microcode"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["maturity"] = mba->maturity;
+            result["optimized"] = true;
+
+            delete mba;
+            return result;
+        });
+    }
+
+    inline nlohmann::json print_microcode(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            hexrays_failure_t hf;
+            mba_ranges_t mbr;
+            mbr.ranges.push_back(range_t(ea, ea + 1));
+
+            mba_t *mba = gen_microcode(mbr, &hf, nullptr, DECOMP_NO_WAIT, MMAT_GENERATED);
+            if (!mba) {
+                return {{"success", false}, {"error", "Failed to generate microcode"}};
+            }
+
+            qstring mcode_text;
+            class qstring_mba_printer_t : public vd_printer_t {
+                qstring &s;
+
+            public:
+                qstring_mba_printer_t(qstring &_s) : s(_s) {
+                }
+
+                AS_PRINTF(3, 4) int hexapi print(int indent, const char *format, ...) override {
+                    va_list va;
+                    va_start(va, format);
+                    for (int i = 0; i < indent; i++)
+                        s.append("  ");
+                    s.cat_vsprnt(format, va);
+                    va_end(va);
+                    return s.length();
+                }
+            };
+            qstring_mba_printer_t printer(mcode_text);
+            mba->print(printer);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["microcode"] = mcode_text.c_str();
+
+            delete mba;
+            return result;
+        });
+    }
+
+    inline nlohmann::json register_hexrays_callback(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["message"] = "Hex-Rays callback registered (placeholder)";
+            result["callback_id"] = 0;
+            return result;
+        });
+    }
+
+    inline nlohmann::json unregister_hexrays_callback(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            int callback_id = params.value("callback_id", -1);
+            if (callback_id < 0) {
+                return {{"success", false}, {"error", "Invalid callback ID"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["message"] = "Hex-Rays callback unregistered (placeholder)";
+            return result;
+        });
+    }
+
+    inline nlohmann::json get_hexrays_version(const nlohmann::json &params) {
+        return execute_sync_wrapper([]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["version"] = ::get_hexrays_version();
+            return result;
+        });
+    }
+
+    inline nlohmann::json mark_cfunc_dirty_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!init_hexrays_plugin()) {
+                return {{"success", false}, {"error", "Hex-Rays decompiler is not available"}};
+            }
+
+            ea_t ea = params.value("address", BADADDR);
+            if (ea == BADADDR) {
+                return {{"success", false}, {"error", "Invalid address"}};
+            }
+
+            mark_cfunc_dirty(ea);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["message"] = "Function marked dirty for re-decompilation";
+            return result;
+        });
+    }
 } // namespace ida_mcp

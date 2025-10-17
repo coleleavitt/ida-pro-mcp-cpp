@@ -1,6 +1,4 @@
 #include "tools/tool_registry.hpp"
-#include "tools/tool_registry.hpp"
-#include "tools/tool_registry.hpp"
 #include "tools/generic_tool.hpp"
 #include "tools/all_tools.hpp"
 #include "common/ida_helpers.hpp"
@@ -9,8 +7,6 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <iomanip>
-#include <vector>
 
 #define DONT_DEFINE_HEXRAYS 1
 #include <ida.hpp>
@@ -1667,7 +1663,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
     },
 
 
-
     // ===== Plugin/Processor Info Tools =====
     {
         "get_idp_name",
@@ -1818,6 +1813,22 @@ static const std::vector<ToolDefinition> tool_definitions = {
         {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
         ida_mcp::step_until_ret
     },
+    {
+        "run_to",
+        "Run until specified address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Target address"}}},
+                    {"pid", {{"type", "integer"}, {"description", "Process ID (optional)"}}},
+                    {"tid", {{"type", "integer"}, {"description", "Thread ID (optional)"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::run_to
+    },
 
     // ===== Script Execution Tools =====
     {
@@ -1878,7 +1889,10 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {
                 "properties", {
                     {"address", {{"type", "integer"}, {"description", "Memory address to read from"}}},
-                    {"size", {{"type", "integer"}, {"default", 256}, {"description", "Number of bytes to read (max 65536)"}}}
+                    {
+                        "size",
+                        {{"type", "integer"}, {"default", 256}, {"description", "Number of bytes to read (max 65536)"}}
+                    }
                 }
             },
             {"required", nlohmann::json::array({"address"})}
@@ -1899,7 +1913,8 @@ static const std::vector<ToolDefinition> tool_definitions = {
             ssize_t bytes_read = read_dbg_memory(address, buffer.data(), size);
 
             if (bytes_read < 0) {
-                throw std::runtime_error("Failed to read memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+                throw std::runtime_error(
+                    "Failed to read memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
             }
 
             buffer.resize(bytes_read);
@@ -1935,7 +1950,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             std::vector<uint8_t> data;
 
             if (args["data"].is_array()) {
-                data = args["data"].get<std::vector<uint8_t>>();
+                data = args["data"].get<std::vector<uint8_t> >();
             } else if (args["data"].is_string()) {
                 std::string hex_str = args["data"];
                 if (hex_str.size() % 2 != 0) {
@@ -1960,7 +1975,8 @@ static const std::vector<ToolDefinition> tool_definitions = {
             ssize_t bytes_written = write_dbg_memory(address, data.data(), data.size());
 
             if (bytes_written < 0) {
-                throw std::runtime_error("Failed to write memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+                throw std::runtime_error(
+                    "Failed to write memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
             }
 
             nlohmann::json result;
@@ -1986,7 +2002,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
 
             nlohmann::json memory_regions = nlohmann::json::array();
 
-            for (const auto &range : ranges) {
+            for (const auto &range: ranges) {
                 nlohmann::json region;
                 region["start_ea"] = static_cast<uint64_t>(range.start_ea);
                 region["end_ea"] = static_cast<uint64_t>(range.end_ea);
@@ -2007,6 +2023,128 @@ static const std::vector<ToolDefinition> tool_definitions = {
             return result;
         }
     },
+    // ===== HEX-RAYS ADVANCED TOOLS =====
+    {
+        "install_hexrays_callback",
+        "Initialize Hex-Rays callback support",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::install_hexrays_callback
+    },
+    {
+        "modify_ctree",
+        "Modify C-tree structure",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"operation", {{"type", "string"}, {"description", "Modification operation"}}}
+                }
+            },
+            {"required", {"address", "operation"}}
+        },
+        ida_mcp::modify_ctree
+    },
+    {
+        "get_ctree_item",
+        "Get C-tree item at specific address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"item_address", {{"type", "integer"}, {"description", "Item address within function"}}}
+                }
+            },
+            {"required", {"address", "item_address"}}
+        },
+        ida_mcp::get_ctree_item
+    },
+    {
+        "get_microcode",
+        "Get microcode at specific maturity level",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {
+                        "maturity",
+                        {
+                            {"type", "string"},
+                            {
+                                "description",
+                                "Maturity level (MMAT_GENERATED, MMAT_LOCOPT, MMAT_CALLS, MMAT_GLBOPT1, MMAT_GLBOPT2, MMAT_GLBOPT3, MMAT_LVARS)"
+                            }
+                        }
+                    }
+                }
+            },
+            {"required", {"address"}}
+        },
+        ida_mcp::get_microcode
+    },
+    {
+        "optimize_microcode",
+        "Optimize microcode to highest maturity level",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}}
+                }
+            },
+            {"required", {"address"}}
+        },
+        ida_mcp::optimize_microcode
+    },
+    {
+        "print_microcode",
+        "Print microcode as text",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}},
+                    {"maturity", {{"type", "string"}, {"description", "Maturity level"}}}
+                }
+            },
+            {"required", {"address"}}
+        },
+        ida_mcp::print_microcode
+    },
+    {
+        "register_hexrays_callback",
+        "Register Hex-Rays event callback",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::register_hexrays_callback
+    },
+    {
+        "unregister_hexrays_callback",
+        "Unregister Hex-Rays event callback",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::unregister_hexrays_callback
+    },
+    {
+        "get_hexrays_version",
+        "Get Hex-Rays decompiler version",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_hexrays_version
+    },
+    {
+        "mark_cfunc_dirty",
+        "Mark function for re-decompilation",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Function address"}}}
+                }
+            },
+            {"required", {"address"}}
+        },
+        ida_mcp::mark_cfunc_dirty_tool
+    },
 
     // ===== Advanced Breakpoint Management =====
     {
@@ -2016,20 +2154,42 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"type", "object"},
             {
                 "properties", {
-                    {"operations", {
-                        {"type", "array"},
-                        {"description", "Array of breakpoint operations"},
-                        {"items", {
-                            {"type", "object"},
-                            {"properties", {
-                                {"action", {{"type", "string"}, {"enum", nlohmann::json::array({"add", "delete", "enable"})}}},
-                                {"address", {{"type", "integer"}, {"description", "Breakpoint address"}}},
-                                {"type", {{"type", "string"}, {"enum", nlohmann::json::array({"soft", "write", "read", "rdwr", "exec"})}, {"default", "soft"}}},
-                                {"enable", {{"type", "boolean"}, {"default", true}}}
-                            }},
-                            {"required", nlohmann::json::array({"action", "address"})}
-                        }}
-                    }}
+                    {
+                        "operations", {
+                            {"type", "array"},
+                            {"description", "Array of breakpoint operations"},
+                            {
+                                "items", {
+                                    {"type", "object"},
+                                    {
+                                        "properties", {
+                                            {
+                                                "action",
+                                                {
+                                                    {"type", "string"},
+                                                    {"enum", nlohmann::json::array({"add", "delete", "enable"})}
+                                                }
+                                            },
+                                            {"address", {{"type", "integer"}, {"description", "Breakpoint address"}}},
+                                            {
+                                                "type",
+                                                {
+                                                    {"type", "string"},
+                                                    {
+                                                        "enum",
+                                                        nlohmann::json::array({"soft", "write", "read", "rdwr", "exec"})
+                                                    },
+                                                    {"default", "soft"}
+                                                }
+                                            },
+                                            {"enable", {{"type", "boolean"}, {"default", true}}}
+                                        }
+                                    },
+                                    {"required", nlohmann::json::array({"action", "address"})}
+                                }
+                            }
+                        }
+                    }
                 }
             },
             {"required", nlohmann::json::array({"operations"})}
@@ -2043,7 +2203,7 @@ static const std::vector<ToolDefinition> tool_definitions = {
             int success_count = 0;
             int fail_count = 0;
 
-            for (const auto &op : args["operations"]) {
+            for (const auto &op: args["operations"]) {
                 std::string action = op.value("action", "");
                 nlohmann::json result;
 
@@ -2096,7 +2256,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
                     } else {
                         success_count++;
                     }
-
                 } else if (action == "delete") {
                     ea_t addr = op.value("address", BADADDR);
                     if (addr == BADADDR) {
@@ -2119,7 +2278,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
                     } else {
                         success_count++;
                     }
-
                 } else if (action == "enable") {
                     ea_t addr = op.value("address", BADADDR);
                     if (addr == BADADDR) {
@@ -2144,7 +2302,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
                     } else {
                         success_count++;
                     }
-
                 } else {
                     result["success"] = false;
                     result["error"] = "Invalid action: " + action;

@@ -36,3 +36,15 @@ auto execute_sync_wrapper(Func &&func) {
     execute_sync(helper, MFF_READ);
     return result;
 }
+
+// Helper function to convert bytes to hex string
+inline std::string bytes_to_hex(const uint8_t* data, size_t size) {
+    std::string hex_str;
+    hex_str.reserve(size * 2);
+    const char hex_chars[] = "0123456789ABCDEF";
+    for (size_t i = 0; i < size; ++i) {
+        hex_str += hex_chars[(data[i] >> 4) & 0xF];
+        hex_str += hex_chars[data[i] & 0xF];
+    }
+    return hex_str;
+}
