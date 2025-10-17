@@ -21,6 +21,7 @@
 #include <srclang.hpp>
 #include <gdl.hpp>
 #include <frame.hpp>
+#include <moves.hpp>
 #include <demangle.hpp>
 #include <nalt.hpp>
 #include <entry.hpp>
@@ -30,6 +31,7 @@
 #include <dbg.hpp>
 #include <idd.hpp>
 #include <auto.hpp>
+#include <kernwin.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -145,6 +147,7 @@ namespace ida_mcp {
 
         return result;
     }
+
 
     // ===== Cross-Reference Tools =====
 
@@ -3957,7 +3960,8 @@ namespace ida_mcp {
 
         // Call the specified function
         if (!call_idc_func(nullptr, function_name.c_str(), nullptr, 0, &errbuf)) {
-            throw std::runtime_error("Failed to call IDC function '" + function_name + "': " + std::string(errbuf.c_str()));
+            throw std::runtime_error(
+                "Failed to call IDC function '" + function_name + "': " + std::string(errbuf.c_str()));
         }
 
         nlohmann::json result;
@@ -3998,7 +4002,7 @@ namespace ida_mcp {
 
             qstring script_code = "import sys\n";
             script_code += qstring("sys.argv = ['") + script_path.c_str() + qstring("']\n");
-            for (const auto &arg : script_args_vec) {
+            for (const auto &arg: script_args_vec) {
                 script_code += qstring("sys.argv.append('") + arg + qstring("')\n");
             }
 
@@ -4014,8 +4018,8 @@ namespace ida_mcp {
                 if (rv == nullptr) break;
 
                 size_t line_len = strlen(buf);
-                if (line_len > 0 && buf[line_len-1] == '\n') {
-                    buf[line_len-1] = 0;
+                if (line_len > 0 && buf[line_len - 1] == '\n') {
+                    buf[line_len - 1] = 0;
                 }
 
                 script_code += qstring(buf) + "\n";
@@ -4023,7 +4027,8 @@ namespace ida_mcp {
             qfclose(py_script_file);
 
             if (!el->eval_snippet(script_code.c_str(), &errbuf)) {
-                throw std::runtime_error("Failed to execute Python script with arguments: " + std::string(errbuf.c_str()));
+                throw std::runtime_error(
+                    "Failed to execute Python script with arguments: " + std::string(errbuf.c_str()));
             }
         } else {
             // Execute without arguments
@@ -4065,13 +4070,14 @@ namespace ida_mcp {
 
             qstring script_code = "import sys\n";
             script_code += "sys.argv = ['<eval>']\n";
-            for (const auto &arg : script_args_vec) {
+            for (const auto &arg: script_args_vec) {
                 script_code += qstring("sys.argv.append('") + arg + qstring("')\n");
             }
             script_code += code.c_str();
 
             if (!el->eval_snippet(script_code.c_str(), &errbuf)) {
-                throw std::runtime_error("Failed to evaluate Python code with arguments: " + std::string(errbuf.c_str()));
+                throw std::runtime_error(
+                    "Failed to evaluate Python code with arguments: " + std::string(errbuf.c_str()));
             }
         } else {
             if (!el->eval_snippet(code.c_str(), &errbuf)) {
@@ -4087,4 +4093,116 @@ namespace ida_mcp {
         return result;
     }
 
+    // ===== Memory Access Tools =====
+
+    inline nlohmann::json read_memory(const nlohmann::json &args) {
+        if (!args.contains("address")) {
+            throw std::invalid_argument("Missing required parameter: address");
+        }
+
+        ea_t address = args["address"];
+        size_t size = args.value("size", 256); // Default to 256 bytes
+
+        if (size > 65536) {
+            // Limit to 64KB
+            throw std::runtime_error("Size exceeds maximum of 65536 bytes");
+        }
+
+        std::vector<uint8_t> buffer(size);
+        ssize_t bytes_read = read_dbg_memory(address, buffer.data(), size);
+
+        if (bytes_read < 0) {
+            throw std::runtime_error(
+                "Failed to read memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+        }
+
+        buffer.resize(bytes_read); // Trim to actual bytes read
+
+        nlohmann::json result;
+        result["address"] = static_cast<uint64_t>(address);
+        result["requested_size"] = size;
+        result["bytes_read"] = bytes_read;
+        result["data"] = buffer;
+
+        return result;
+    }
+
+    inline nlohmann::json write_memory(const nlohmann::json &args) {
+        if (!args.contains("address") || !args.contains("data")) {
+            throw std::invalid_argument("Missing required parameters: address, data");
+        }
+
+        ea_t address = args["address"];
+        std::vector<uint8_t> data;
+
+        if (args["data"].is_array()) {
+            data = args["data"].get<std::vector<uint8_t> >();
+        } else if (args["data"].is_string()) {
+            // Handle hex string input
+            std::string hex_str = args["data"];
+            if (hex_str.size() % 2 != 0) {
+                throw std::invalid_argument("Hex string must have even length");
+            }
+            for (size_t i = 0; i < hex_str.size(); i += 2) {
+                std::string byte_str = hex_str.substr(i, 2);
+                data.push_back(static_cast<uint8_t>(std::stoi(byte_str, nullptr, 16)));
+            }
+        } else {
+            throw std::invalid_argument("Data must be an array of bytes or a hex string");
+        }
+
+        if (data.empty()) {
+            throw std::invalid_argument("Data cannot be empty");
+        }
+
+        if (data.size() > 65536) {
+            // Limit to 64KB
+            throw std::runtime_error("Data size exceeds maximum of 65536 bytes");
+        }
+
+        ssize_t bytes_written = write_dbg_memory(address, data.data(), data.size());
+
+        if (bytes_written < 0) {
+            throw std::runtime_error(
+                "Failed to write memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+        }
+
+        nlohmann::json result;
+        result["address"] = static_cast<uint64_t>(address);
+        result["bytes_written"] = bytes_written;
+        result["requested_size"] = data.size();
+        result["success"] = (bytes_written == static_cast<ssize_t>(data.size()));
+
+        return result;
+    }
+
+    inline nlohmann::json get_memory_info(const nlohmann::json &args) {
+        meminfo_vec_t ranges;
+
+        int count = get_dbg_memory_info(&ranges);
+
+        nlohmann::json memory_regions = nlohmann::json::array();
+
+        for (const auto &range: ranges) {
+            nlohmann::json region;
+            region["start_ea"] = static_cast<uint64_t>(range.start_ea);
+            region["end_ea"] = static_cast<uint64_t>(range.end_ea);
+            region["size"] = static_cast<uint64_t>(range.size());
+            region["name"] = range.name.c_str();
+            region["class"] = range.sclass.c_str();
+            region["sbase"] = static_cast<uint64_t>(range.sbase);
+            region["bitness"] = range.bitness;
+            region["perm"] = range.perm;
+
+            memory_regions.push_back(region);
+        }
+
+        nlohmann::json result;
+        result["count"] = count;
+        result["memory_regions"] = memory_regions;
+
+        return result;
+    }
+
+    // ===== Advanced Breakpoint Management =====
 } // namespace ida_mcp

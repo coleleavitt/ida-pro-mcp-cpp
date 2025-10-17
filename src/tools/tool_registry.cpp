@@ -1,7 +1,15 @@
 #include "tools/tool_registry.hpp"
+#include "tools/tool_registry.hpp"
+#include "tools/tool_registry.hpp"
 #include "tools/generic_tool.hpp"
 #include "tools/all_tools.hpp"
 #include "common/ida_helpers.hpp"
+
+// Additional includes for new tools
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iomanip>
 #include <vector>
 
 #define DONT_DEFINE_HEXRAYS 1
@@ -1658,6 +1666,8 @@ static const std::vector<ToolDefinition> tool_definitions = {
         ida_mcp::generate_disasm_file
     },
 
+
+
     // ===== Plugin/Processor Info Tools =====
     {
         "get_idp_name",
@@ -1857,6 +1867,303 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"code"})}
         },
         ida_mcp::eval_python_code
+    },
+
+    // ===== Memory Access Tools =====
+    {
+        "read_memory",
+        "Read memory from debugged process",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Memory address to read from"}}},
+                    {"size", {{"type", "integer"}, {"default", 256}, {"description", "Number of bytes to read (max 65536)"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        [](const nlohmann::json &args) -> nlohmann::json {
+            if (!args.contains("address")) {
+                throw std::invalid_argument("Missing required parameter: address");
+            }
+
+            ea_t address = args["address"];
+            size_t size = args.value("size", 256);
+
+            if (size > 65536) {
+                throw std::runtime_error("Size exceeds maximum of 65536 bytes");
+            }
+
+            std::vector<uint8_t> buffer(size);
+            ssize_t bytes_read = read_dbg_memory(address, buffer.data(), size);
+
+            if (bytes_read < 0) {
+                throw std::runtime_error("Failed to read memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+            }
+
+            buffer.resize(bytes_read);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(address);
+            result["requested_size"] = size;
+            result["bytes_read"] = bytes_read;
+            result["data"] = buffer;
+
+            return result;
+        }
+    },
+    {
+        "write_memory",
+        "Write memory to debugged process",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Memory address to write to"}}},
+                    {"data", {{"description", "Data to write (array of bytes or hex string)"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address", "data"})}
+        },
+        [](const nlohmann::json &args) -> nlohmann::json {
+            if (!args.contains("address") || !args.contains("data")) {
+                throw std::invalid_argument("Missing required parameters: address, data");
+            }
+
+            ea_t address = args["address"];
+            std::vector<uint8_t> data;
+
+            if (args["data"].is_array()) {
+                data = args["data"].get<std::vector<uint8_t>>();
+            } else if (args["data"].is_string()) {
+                std::string hex_str = args["data"];
+                if (hex_str.size() % 2 != 0) {
+                    throw std::invalid_argument("Hex string must have even length");
+                }
+                for (size_t i = 0; i < hex_str.size(); i += 2) {
+                    std::string byte_str = hex_str.substr(i, 2);
+                    data.push_back(static_cast<uint8_t>(std::stoi(byte_str, nullptr, 16)));
+                }
+            } else {
+                throw std::invalid_argument("Data must be an array of bytes or a hex string");
+            }
+
+            if (data.empty()) {
+                throw std::invalid_argument("Data cannot be empty");
+            }
+
+            if (data.size() > 65536) {
+                throw std::runtime_error("Data size exceeds maximum of 65536 bytes");
+            }
+
+            ssize_t bytes_written = write_dbg_memory(address, data.data(), data.size());
+
+            if (bytes_written < 0) {
+                throw std::runtime_error("Failed to write memory at address 0x" + std::to_string(static_cast<uint64_t>(address)));
+            }
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(address);
+            result["bytes_written"] = bytes_written;
+            result["requested_size"] = data.size();
+            result["success"] = (bytes_written == static_cast<ssize_t>(data.size()));
+
+            return result;
+        }
+    },
+    {
+        "get_memory_info",
+        "Get memory region information from debugged process",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        [](const nlohmann::json &args) -> nlohmann::json {
+            meminfo_vec_t ranges;
+            int count = get_dbg_memory_info(&ranges);
+
+            nlohmann::json memory_regions = nlohmann::json::array();
+
+            for (const auto &range : ranges) {
+                nlohmann::json region;
+                region["start_ea"] = static_cast<uint64_t>(range.start_ea);
+                region["end_ea"] = static_cast<uint64_t>(range.end_ea);
+                region["size"] = static_cast<uint64_t>(range.size());
+                region["name"] = range.name.c_str();
+                region["class"] = range.sclass.c_str();
+                region["sbase"] = static_cast<uint64_t>(range.sbase);
+                region["bitness"] = range.bitness;
+                region["perm"] = range.perm;
+
+                memory_regions.push_back(region);
+            }
+
+            nlohmann::json result;
+            result["count"] = count;
+            result["memory_regions"] = memory_regions;
+
+            return result;
+        }
+    },
+
+    // ===== Advanced Breakpoint Management =====
+    {
+        "update_bpts",
+        "Advanced breakpoint management - add, delete, or enable/disable breakpoints",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"operations", {
+                        {"type", "array"},
+                        {"description", "Array of breakpoint operations"},
+                        {"items", {
+                            {"type", "object"},
+                            {"properties", {
+                                {"action", {{"type", "string"}, {"enum", nlohmann::json::array({"add", "delete", "enable"})}}},
+                                {"address", {{"type", "integer"}, {"description", "Breakpoint address"}}},
+                                {"type", {{"type", "string"}, {"enum", nlohmann::json::array({"soft", "write", "read", "rdwr", "exec"})}, {"default", "soft"}}},
+                                {"enable", {{"type", "boolean"}, {"default", true}}}
+                            }},
+                            {"required", nlohmann::json::array({"action", "address"})}
+                        }}
+                    }}
+                }
+            },
+            {"required", nlohmann::json::array({"operations"})}
+        },
+        [](const nlohmann::json &args) -> nlohmann::json {
+            if (!args.contains("operations") || !args["operations"].is_array()) {
+                throw std::invalid_argument("Missing or invalid 'operations' parameter");
+            }
+
+            nlohmann::json results = nlohmann::json::array();
+            int success_count = 0;
+            int fail_count = 0;
+
+            for (const auto &op : args["operations"]) {
+                std::string action = op.value("action", "");
+                nlohmann::json result;
+
+                if (action == "add") {
+                    bpt_t bpt;
+                    bpt.ea = op.value("address", BADADDR);
+                    if (bpt.ea == BADADDR) {
+                        result["success"] = false;
+                        result["error"] = "Add operation missing valid address";
+                        results.push_back(result);
+                        fail_count++;
+                        continue;
+                    }
+
+                    std::string type_str = op.value("type", "soft");
+                    if (type_str == "soft") {
+                        bpt.type = BPT_SOFT;
+                    } else if (type_str == "write") {
+                        bpt.type = BPT_WRITE;
+                    } else if (type_str == "read") {
+                        bpt.type = BPT_READ;
+                    } else if (type_str == "rdwr") {
+                        bpt.type = BPT_RDWR;
+                    } else if (type_str == "exec") {
+                        bpt.type = BPT_EXEC;
+                    } else {
+                        result["success"] = false;
+                        result["error"] = "Invalid breakpoint type: " + type_str;
+                        results.push_back(result);
+                        fail_count++;
+                        continue;
+                    }
+
+                    bpt.size = op.value("size", 0);
+                    bpt.pid = op.value("pid", NO_PROCESS);
+                    bpt.tid = op.value("tid", NO_THREAD);
+                    bpt.pass_count = op.value("pass_count", 0);
+                    bpt.flags = BPT_BRK | BPT_ENABLED;
+
+                    bool success = add_bpt(bpt);
+
+                    result["action"] = "add";
+                    result["address"] = static_cast<uint64_t>(bpt.ea);
+                    result["type"] = type_str;
+                    result["success"] = success;
+
+                    if (!success) {
+                        result["error"] = "Failed to add breakpoint";
+                        fail_count++;
+                    } else {
+                        success_count++;
+                    }
+
+                } else if (action == "delete") {
+                    ea_t addr = op.value("address", BADADDR);
+                    if (addr == BADADDR) {
+                        result["success"] = false;
+                        result["error"] = "Delete operation missing valid address";
+                        results.push_back(result);
+                        fail_count++;
+                        continue;
+                    }
+
+                    bool success = del_bpt(addr);
+
+                    result["action"] = "delete";
+                    result["address"] = static_cast<uint64_t>(addr);
+                    result["success"] = success;
+
+                    if (!success) {
+                        result["error"] = "Failed to delete breakpoint";
+                        fail_count++;
+                    } else {
+                        success_count++;
+                    }
+
+                } else if (action == "enable") {
+                    ea_t addr = op.value("address", BADADDR);
+                    if (addr == BADADDR) {
+                        result["success"] = false;
+                        result["error"] = "Enable operation missing valid address";
+                        results.push_back(result);
+                        fail_count++;
+                        continue;
+                    }
+
+                    bool enable = op.value("enable", true);
+                    bool success = ::enable_bpt(addr, enable);
+
+                    result["action"] = "enable";
+                    result["address"] = static_cast<uint64_t>(addr);
+                    result["enabled"] = enable;
+                    result["success"] = success;
+
+                    if (!success) {
+                        result["error"] = std::string("Failed to ") + (enable ? "enable" : "disable") + " breakpoint";
+                        fail_count++;
+                    } else {
+                        success_count++;
+                    }
+
+                } else {
+                    result["success"] = false;
+                    result["error"] = "Invalid action: " + action;
+                    results.push_back(result);
+                    fail_count++;
+                    continue;
+                }
+
+                results.push_back(result);
+            }
+
+            nlohmann::json summary;
+            summary["total_operations"] = results.size();
+            summary["successful"] = success_count;
+            summary["failed"] = fail_count;
+            summary["results"] = results;
+
+            return summary;
+        }
     }
 };
 
