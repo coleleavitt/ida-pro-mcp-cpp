@@ -3337,6 +3337,21 @@ namespace ida_mcp {
         return result;
     }
 
+    inline nlohmann::json run_to(const nlohmann::json &args) {
+        if (!args.contains("address")) {
+            throw std::invalid_argument("Missing required parameter: address");
+        }
+
+        ea_t address = args["address"];
+        bool success = request_run_to(address);
+
+        nlohmann::json result;
+        result["address"] = static_cast<uint64_t>(address);
+        result["success"] = success;
+
+        return result;
+    }
+
     // ===== Function Modification Tools =====
 
     inline nlohmann::json set_func_name(const nlohmann::json &args) {

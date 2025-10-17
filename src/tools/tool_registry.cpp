@@ -1304,137 +1304,6 @@ static const std::vector<ToolDefinition> tool_definitions = {
         ida_mcp::get_input_file_path
     },
 
-    // ===== Debugging Tools =====
-    {
-        "set_bpt",
-        "Set breakpoint at address",
-        {
-            {"type", "object"},
-            {
-                "properties", {
-                    {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"size", {{"type", "integer"}, {"default", 0}}},
-                    {"type", {{"type", "integer"}, {"default", 0}}}
-                }
-            },
-            {"required", nlohmann::json::array({"address"})}
-        },
-        ida_mcp::set_bpt
-    },
-    {
-        "del_bpt",
-        "Delete breakpoint at address",
-        {
-            {"type", "object"},
-            {
-                "properties", {
-                    {"address", {{"type", "integer"}, {"description", "Address"}}}
-                }
-            },
-            {"required", nlohmann::json::array({"address"})}
-        },
-        ida_mcp::del_bpt
-    },
-    {
-        "enable_bpt",
-        "Enable or disable breakpoint",
-        {
-            {"type", "object"},
-            {
-                "properties", {
-                    {"address", {{"type", "integer"}, {"description", "Address"}}},
-                    {"enable", {{"type", "boolean"}, {"default", true}}}
-                }
-            },
-            {"required", nlohmann::json::array({"address"})}
-        },
-        ida_mcp::enable_bpt
-    },
-    {
-        "get_bpt",
-        "Get breakpoint info at address",
-        {
-            {"type", "object"},
-            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
-            {"required", nlohmann::json::array({"address"})}
-        },
-        ida_mcp::get_bpt
-    },
-    {
-        "get_thread_qty",
-        "Get number of threads",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::get_thread_qty
-    },
-    {
-        "get_threads",
-        "Get all threads",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::get_threads
-    },
-    {
-        "select_thread",
-        "Select active thread",
-        {
-            {"type", "object"},
-            {"properties", {{"thread_id", {{"type", "integer"}, {"description", "Thread ID"}}}}},
-            {"required", nlohmann::json::array({"thread_id"})}
-        },
-        ida_mcp::select_thread
-    },
-    {
-        "start_process",
-        "Start debugging process",
-        {
-            {"type", "object"},
-            {
-                "properties", {
-                    {"path", {{"type", "string"}, {"default", ""}}},
-                    {"args", {{"type", "string"}, {"default", ""}}},
-                    {"working_dir", {{"type", "string"}, {"default", ""}}}
-                }
-            },
-            {"required", nlohmann::json::array()}
-        },
-        ida_mcp::start_process
-    },
-    {
-        "exit_process",
-        "Exit debugging process",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::exit_process
-    },
-    {
-        "suspend_process",
-        "Suspend debugging process",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::suspend_process
-    },
-    {
-        "resume_process",
-        "Resume debugging process",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::resume_process
-    },
-    {
-        "step_into",
-        "Step into instruction",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::step_into
-    },
-    {
-        "step_over",
-        "Step over instruction",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::step_over
-    },
-    {
-        "step_until_ret",
-        "Step until return",
-        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
-        ida_mcp::step_until_ret
-    },
-
     // ===== Function Modification Tools =====
     {
         "set_func_name",
@@ -1811,6 +1680,133 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"plugin_name"})}
         },
         ida_mcp::get_plugin_options
+    },
+
+    // ===== Debugging Tools =====
+    {
+        "set_bpt",
+        "Set breakpoint at address",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"size", {{"type", "integer"}, {"default", 0}, {"description", "Breakpoint size"}}},
+                    {"type", {{"type", "integer"}, {"default", 0}, {"description", "Breakpoint type (0=soft, 1=hard)"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::set_bpt
+    },
+    {
+        "del_bpt",
+        "Delete breakpoint at address",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::del_bpt
+    },
+    {
+        "enable_bpt",
+        "Enable or disable breakpoint",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Address"}}},
+                    {"enable", {{"type", "boolean"}, {"default", true}, {"description", "Enable breakpoint"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::enable_bpt
+    },
+    {
+        "get_bpt",
+        "Get breakpoint information",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_bpt
+    },
+    {
+        "get_thread_qty",
+        "Get number of threads",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_thread_qty
+    },
+    {
+        "get_threads",
+        "Get all threads",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::get_threads
+    },
+    {
+        "select_thread",
+        "Select active thread",
+        {
+            {"type", "object"},
+            {"properties", {{"thread_id", {{"type", "integer"}, {"description", "Thread ID"}}}}},
+            {"required", nlohmann::json::array({"thread_id"})}
+        },
+        ida_mcp::select_thread
+    },
+    {
+        "start_process",
+        "Start debugging process",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"path", {{"type", "string"}, {"default", ""}, {"description", "Executable path"}}},
+                    {"args", {{"type", "string"}, {"default", ""}, {"description", "Command line arguments"}}},
+                    {"working_dir", {{"type", "string"}, {"default", ""}, {"description", "Working directory"}}}
+                }
+            },
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::start_process
+    },
+    {
+        "exit_process",
+        "Exit debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::exit_process
+    },
+    {
+        "suspend_process",
+        "Suspend debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::suspend_process
+    },
+    {
+        "resume_process",
+        "Resume debugging process",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::resume_process
+    },
+    {
+        "step_into",
+        "Step into instruction",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_into
+    },
+    {
+        "step_over",
+        "Step over instruction",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_over
+    },
+    {
+        "step_until_ret",
+        "Step until return",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::step_until_ret
     },
 
     // ===== Script Execution Tools =====
