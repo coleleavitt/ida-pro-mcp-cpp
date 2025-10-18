@@ -5634,4 +5634,251 @@ namespace ida_mcp {
         });
     }
 
+    // ============================================================================
+    // ADVANCED DEBUGGER TOOLS
+    // ============================================================================
+
+    /**
+     * Load debugger module
+     */
+    inline nlohmann::json load_debugger_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            std::string debugger_name = params["debugger_name"];
+            bool use_remote = params.contains("use_remote") ? static_cast<bool>(params["use_remote"]) : false;
+
+            bool success = load_debugger(debugger_name.c_str(), use_remote);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["debugger_name"] = debugger_name;
+            result["use_remote"] = use_remote;
+            return result;
+        });
+    }
+
+    /**
+     * Check if debugger is currently active
+     */
+    inline nlohmann::json is_debugger_on_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            bool is_on = is_debugger_on();
+
+            nlohmann::json result;
+            result["is_on"] = is_on;
+            return result;
+        });
+    }
+
+    /**
+     * Get list of running processes
+     */
+    inline nlohmann::json get_processes_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            procinfo_vec_t processes;
+            ssize_t count = get_processes(&processes);
+
+            nlohmann::json result;
+            result["count"] = static_cast<int64_t>(count);
+
+            if (count > 0) {
+                nlohmann::json proc_list = nlohmann::json::array();
+                for (const auto &proc : processes) {
+                    nlohmann::json proc_info;
+                    proc_info["pid"] = static_cast<int64_t>(proc.pid);
+                    proc_info["name"] = proc.name.c_str();
+                    proc_list.push_back(proc_info);
+                }
+                result["processes"] = proc_list;
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Attach to a running process
+     */
+    inline nlohmann::json attach_process_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            pid_t pid = params.contains("pid") ? static_cast<pid_t>(params["pid"]) : NO_PROCESS;
+            int event_id = params.contains("event_id") ? static_cast<int>(params["event_id"]) : -1;
+
+            int result_code = attach_process(pid, event_id);
+
+            nlohmann::json result;
+            result["result_code"] = result_code;
+            result["success"] = (result_code != 0);
+            if (pid != NO_PROCESS) {
+                result["pid"] = static_cast<int64_t>(pid);
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Detach from current process
+     */
+    inline nlohmann::json detach_process_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            bool success = detach_process();
+
+            nlohmann::json result;
+            result["success"] = success;
+            return result;
+        });
+    }
+
+    /**
+     * Get register value by name
+     */
+    inline nlohmann::json get_reg_val_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            std::string regname = params["register_name"];
+
+            uint64 value;
+            bool success = get_reg_val(regname.c_str(), &value);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["register_name"] = regname;
+            if (success) {
+                result["value"] = static_cast<uint64_t>(value);
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Set register value by name
+     */
+    inline nlohmann::json set_reg_val_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            std::string regname = params["register_name"];
+            uint64 value = params["value"];
+
+            bool success = set_reg_val(regname.c_str(), value);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["register_name"] = regname;
+            result["value"] = static_cast<uint64_t>(value);
+            return result;
+        });
+    }
+
+    /**
+     * Get all registers for thread
+     */
+    inline nlohmann::json get_reg_vals_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            thid_t tid = params.contains("thread_id") ? static_cast<thid_t>(params["thread_id"]) : 0;
+            int clsmask = params.contains("class_mask") ? static_cast<int>(params["class_mask"]) : 0xFF;
+
+            regval_t values[256];
+            int count = get_reg_vals(tid, clsmask, values);
+
+            nlohmann::json result;
+            result["count"] = count;
+            result["success"] = (count > 0);
+
+            if (count > 0) {
+                nlohmann::json reg_array = nlohmann::json::array();
+                for (int i = 0; i < count && i < 256; i++) {
+                    nlohmann::json reg_info;
+                    reg_info["index"] = i;
+                    reg_info["ival"] = static_cast<uint64_t>(values[i].ival);
+                    reg_array.push_back(reg_info);
+                }
+                result["registers"] = reg_array;
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Check if address is in debugger memory
+     */
+    inline nlohmann::json is_debugger_memory_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            bool is_dbg_mem = is_debugger_memory(ea);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["is_debugger_memory"] = is_dbg_mem;
+            return result;
+        });
+    }
+
+    /**
+     * Get byte from debugger memory
+     */
+    inline nlohmann::json get_dbg_byte_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            uint32 value;
+            bool success = get_dbg_byte(&value, ea);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            if (success) {
+                result["value"] = static_cast<uint32_t>(value);
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Put byte to debugger memory
+     */
+    inline nlohmann::json put_dbg_byte_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            uint32 value = params["value"];
+
+            bool success = put_dbg_byte(ea, value);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["value"] = static_cast<uint32_t>(value);
+            return result;
+        });
+    }
+
+    /**
+     * Invalidate debugger memory cache
+     */
+    inline nlohmann::json invalidate_dbgmem_contents_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            asize_t size = params["size"];
+
+            invalidate_dbgmem_contents(ea, size);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Invalidate debugger memory configuration
+     */
+    inline nlohmann::json invalidate_dbgmem_config_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            invalidate_dbgmem_config();
+
+            nlohmann::json result;
+            result["success"] = true;
+            return result;
+        });
+    }
+
 } // namespace ida_mcp

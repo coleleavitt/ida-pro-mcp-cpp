@@ -2998,6 +2998,161 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"type", "address"})}
         },
         ida_mcp::forget_problem_tool
+    },
+    // Advanced Debugger Tools
+    {
+        "load_debugger",
+        "Load debugger module",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"debugger_name", {{"type", "string"}, {"description", "Debugger module name (e.g., 'linux', 'win32', 'gdb')"}}},
+                {"use_remote", {{"type", "boolean"}, {"description", "Use remote debugging (optional, default false)"}}}
+            }},
+            {"required", nlohmann::json::array({"debugger_name"})}
+        },
+        ida_mcp::load_debugger_tool
+    },
+    {
+        "is_debugger_on",
+        "Check if debugger is currently active",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::is_debugger_on_tool
+    },
+    {
+        "get_processes",
+        "Get list of running processes",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_processes_tool
+    },
+    {
+        "attach_process",
+        "Attach debugger to a running process",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"pid", {{"type", "integer"}, {"description", "Process ID to attach to (optional)"}}},
+                {"event_id", {{"type", "integer"}, {"description", "Event ID (optional, default -1)"}}}
+            }},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::attach_process_tool
+    },
+    {
+        "detach_process",
+        "Detach debugger from current process",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::detach_process_tool
+    },
+    {
+        "get_reg_val",
+        "Get register value by name",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"register_name", {{"type", "string"}, {"description", "Register name (e.g., 'rax', 'eip', 'r0')"}}}
+            }},
+            {"required", nlohmann::json::array({"register_name"})}
+        },
+        ida_mcp::get_reg_val_tool
+    },
+    {
+        "set_reg_val",
+        "Set register value by name",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"register_name", {{"type", "string"}, {"description", "Register name (e.g., 'rax', 'eip', 'r0')"}}},
+                {"value", {{"type", "integer"}, {"description", "Register value to set"}}}
+            }},
+            {"required", nlohmann::json::array({"register_name", "value"})}
+        },
+        ida_mcp::set_reg_val_tool
+    },
+    {
+        "get_reg_vals",
+        "Get all register values for thread",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"thread_id", {{"type", "integer"}, {"description", "Thread ID (optional, default 0)"}}},
+                {"class_mask", {{"type", "integer"}, {"description", "Register class mask (optional, default 0xFF)"}}}
+            }},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::get_reg_vals_tool
+    },
+    {
+        "is_debugger_memory",
+        "Check if address is in debugger memory space",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address to check"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_debugger_memory_tool
+    },
+    {
+        "get_dbg_byte",
+        "Get byte from debugger memory",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_dbg_byte_tool
+    },
+    {
+        "put_dbg_byte",
+        "Write byte to debugger memory",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"value", {{"type", "integer"}, {"description", "Byte value (0-255)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "value"})}
+        },
+        ida_mcp::put_dbg_byte_tool
+    },
+    {
+        "invalidate_dbgmem_contents",
+        "Invalidate debugger memory cache for range",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Start address"}}},
+                {"size", {{"type", "integer"}, {"description", "Size in bytes"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "size"})}
+        },
+        ida_mcp::invalidate_dbgmem_contents_tool
+    },
+    {
+        "invalidate_dbgmem_config",
+        "Invalidate debugger memory configuration",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()},
+            {"required", nlohmann::json::array()}
+        },
+        ida_mcp::invalidate_dbgmem_config_tool
     }
 };
 
