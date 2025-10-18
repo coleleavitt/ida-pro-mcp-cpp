@@ -32,6 +32,9 @@
 #include <idd.hpp>
 #include <auto.hpp>
 #include <kernwin.hpp>
+#include <offset.hpp>
+#include <segregs.hpp>
+#include <problems.hpp>
 
 #ifdef snprintf
 #undef snprintf
@@ -4925,6 +4928,708 @@ namespace ida_mcp {
             result["success"] = true;
             result["name"] = name;
             result["size"] = size;
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // OPERAND MANIPULATION TOOLS
+    // ============================================================================
+
+    /**
+     * Convert operand to offset reference
+     */
+    inline nlohmann::json op_offset_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+            ea_t base = params.contains("base") ? static_cast<ea_t>(params["base"]) : 0;
+            ea_t target = params.contains("target") ? static_cast<ea_t>(params["target"]) : BADADDR;
+
+            reftype_t reftype = get_default_reftype(ea);
+            bool success = op_offset(ea, opnd, reftype, target, base);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            return result;
+        });
+    }
+
+    /**
+     * Convert operand to hexadecimal number
+     */
+    inline nlohmann::json op_hex_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+
+            bool success = op_hex(ea, opnd);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            return result;
+        });
+    }
+
+    /**
+     * Convert operand to decimal number
+     */
+    inline nlohmann::json op_dec_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+
+            bool success = op_dec(ea, opnd);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            return result;
+        });
+    }
+
+    /**
+     * Convert operand to character constant
+     */
+    inline nlohmann::json op_chr_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+
+            bool success = op_chr(ea, opnd);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            return result;
+        });
+    }
+
+    /**
+     * Convert operand to enum member
+     */
+    inline nlohmann::json op_enum_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+            std::string enum_name = params["enum_name"];
+
+            // Get enum type ID
+            tid_t enum_id = get_named_type_tid(enum_name.c_str());
+            if (enum_id == BADADDR) {
+                return {{"success", false}, {"error", "Enum not found"}};
+            }
+
+            bool success = op_enum(ea, opnd, enum_id, 0);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            result["enum_name"] = enum_name;
+            return result;
+        });
+    }
+
+    /**
+     * Convert operand to structure offset
+     */
+    inline nlohmann::json op_stroff_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int opnd = params["operand"];
+            std::string struct_name = params["struct_name"];
+
+            // Get struct ID
+            tid_t struct_id = get_struc_id(struct_name.c_str());
+            if (struct_id == BADADDR) {
+                return {{"success", false}, {"error", "Structure not found"}};
+            }
+
+            // Decode instruction
+            insn_t insn;
+            if (decode_insn(&insn, ea) == 0) {
+                return {{"success", false}, {"error", "Failed to decode instruction"}};
+            }
+
+            // Create path array with struct ID
+            tid_t path[1] = {struct_id};
+            bool success = op_stroff(insn, opnd, path, 1, 0);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = opnd;
+            result["struct_name"] = struct_name;
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // DATA DEFINITION TOOLS
+    // ============================================================================
+
+    /**
+     * Create byte (8-bit) data at address
+     */
+    inline nlohmann::json create_byte_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            asize_t size = params.contains("size") ? static_cast<asize_t>(params["size"]) : 1;
+
+            bool success = create_byte(ea, size);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Create word (16-bit) data at address
+     */
+    inline nlohmann::json create_word_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            asize_t size = params.contains("size") ? static_cast<asize_t>(params["size"]) : 2;
+
+            bool success = create_word(ea, size);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Create dword (32-bit) data at address
+     */
+    inline nlohmann::json create_dword_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            asize_t size = params.contains("size") ? static_cast<asize_t>(params["size"]) : 4;
+
+            bool success = create_dword(ea, size);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Create qword (64-bit) data at address
+     */
+    inline nlohmann::json create_qword_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            asize_t size = params.contains("size") ? static_cast<asize_t>(params["size"]) : 8;
+
+            bool success = create_qword(ea, size);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Create string data at address
+     */
+    inline nlohmann::json create_strlit_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            size_t len = params.contains("length") ? static_cast<size_t>(params["length"]) : 0;
+            int32 strtype = params.contains("string_type") ? static_cast<int32>(params["string_type"]) : STRTYPE_C;
+
+            bool success = create_strlit(ea, len, strtype);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            if (len > 0) result["length"] = static_cast<uint64_t>(len);
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // SEGMENT OPERATIONS
+    // ============================================================================
+
+    /**
+     * Create new segment
+     */
+    inline nlohmann::json add_segm_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t start = params["start_address"];
+            ea_t end = params["end_address"];
+            std::string name = params["name"];
+            std::string class_name = params.contains("class_name") ? static_cast<std::string>(params["class_name"]) : "DATA";
+
+            int flags = ADDSEG_QUIET | ADDSEG_NOSREG;
+            bool success = add_segm(0, start, end, name.c_str(), class_name.c_str(), flags);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["start_address"] = static_cast<uint64_t>(start);
+            result["end_address"] = static_cast<uint64_t>(end);
+            result["name"] = name;
+            return result;
+        });
+    }
+
+    /**
+     * Delete segment
+     */
+    inline nlohmann::json del_segm_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int flags = params.contains("flags") ? static_cast<int>(params["flags"]) : SEGMOD_KEEP;
+
+            bool success = del_segm(ea, flags);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            return result;
+        });
+    }
+
+    /**
+     * Set segment name
+     */
+    inline nlohmann::json set_segm_name_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            std::string name = params["name"];
+
+            segment_t *seg = getseg(ea);
+            if (!seg) {
+                return {{"success", false}, {"error", "No segment at address"}};
+            }
+
+            bool success = set_segm_name(seg, name.c_str());
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["name"] = name;
+            return result;
+        });
+    }
+
+    /**
+     * Set segment class
+     */
+    inline nlohmann::json set_segm_class_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            std::string class_name = params["class_name"];
+
+            segment_t *seg = getseg(ea);
+            if (!seg) {
+                return {{"success", false}, {"error", "No segment at address"}};
+            }
+
+            bool success = set_segm_class(seg, class_name.c_str());
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["class_name"] = class_name;
+            return result;
+        });
+    }
+
+    /**
+     * Set segment addressing mode (16/32/64 bit)
+     */
+    inline nlohmann::json set_segm_addressing_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int bitness = params["bitness"]; // 0=16bit, 1=32bit, 2=64bit
+
+            segment_t *seg = getseg(ea);
+            if (!seg) {
+                return {{"success", false}, {"error", "No segment at address"}};
+            }
+
+            seg->bitness = bitness;
+            bool success = (seg->bitness == bitness);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["bitness"] = bitness;
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // DATA MANIPULATION
+    // ============================================================================
+
+    /**
+     * Delete data/code at address (make undefined)
+     */
+    inline nlohmann::json del_items_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int flags = params.contains("flags") ? static_cast<int>(params["flags"]) : 0;
+            asize_t size = params.contains("size") ? static_cast<asize_t>(params["size"]) : 1;
+
+            bool success = del_items(ea, flags, size);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Get item size at address
+     */
+    inline nlohmann::json get_item_size_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            asize_t size = get_item_size(ea);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["size"] = static_cast<uint64_t>(size);
+            return result;
+        });
+    }
+
+    /**
+     * Get next item head (next defined item)
+     */
+    inline nlohmann::json next_head_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            ea_t max_ea = params.contains("max_address") ? static_cast<ea_t>(params["max_address"]) : BADADDR;
+
+            ea_t next = next_head(ea, max_ea);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["next_address"] = static_cast<uint64_t>(next);
+            result["found"] = (next != BADADDR);
+            return result;
+        });
+    }
+
+    /**
+     * Get previous item head
+     */
+    inline nlohmann::json prev_head_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            ea_t min_ea = params.contains("min_address") ? static_cast<ea_t>(params["min_address"]) : 0;
+
+            ea_t prev = prev_head(ea, min_ea);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["prev_address"] = static_cast<uint64_t>(prev);
+            result["found"] = (prev != BADADDR);
+            return result;
+        });
+    }
+
+    /**
+     * Get item flags at address
+     */
+    inline nlohmann::json get_flags_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            flags64_t flags = get_flags(ea);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["flags"] = static_cast<uint64_t>(flags);
+            result["is_code"] = is_code(flags);
+            result["is_data"] = is_data(flags);
+            result["is_unknown"] = is_unknown(flags);
+            result["has_name"] = has_name(flags);
+            result["has_dummy_name"] = has_dummy_name(flags);
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // OFFSET/REFERENCE INFORMATION TOOLS
+    // ============================================================================
+
+    /**
+     * Get offset base value
+     */
+    inline nlohmann::json get_offbase_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int n = params["operand"];
+
+            ea_t base = get_offbase(ea, n);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = n;
+            result["base"] = static_cast<uint64_t>(base);
+            result["found"] = (base != BADADDR);
+            return result;
+        });
+    }
+
+    /**
+     * Check if operand is offset
+     */
+    inline nlohmann::json is_off_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int n = params["operand"];
+
+            flags64_t flags = get_flags(ea);
+            bool is_offset = is_off(flags, n);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = n;
+            result["is_offset"] = is_offset;
+            return result;
+        });
+    }
+
+    /**
+     * Get reference information
+     */
+    inline nlohmann::json get_refinfo_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int n = params["operand"];
+
+            refinfo_t ri;
+            bool success = get_refinfo(&ri, ea, n);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = n;
+
+            if (success) {
+                result["base"] = static_cast<uint64_t>(ri.base);
+                result["target"] = static_cast<uint64_t>(ri.target);
+                result["tdelta"] = static_cast<int64_t>(ri.tdelta);
+                result["flags"] = static_cast<uint32_t>(ri.flags);
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Set reference information
+     */
+    inline nlohmann::json set_refinfo_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int n = params["operand"];
+            ea_t target = params.contains("target") ? static_cast<ea_t>(params["target"]) : BADADDR;
+            ea_t base = params.contains("base") ? static_cast<ea_t>(params["base"]) : 0;
+            adiff_t tdelta = params.contains("tdelta") ? static_cast<adiff_t>(params["tdelta"]) : 0;
+
+            reftype_t reftype = get_default_reftype(ea);
+            bool success = set_refinfo(ea, n, reftype, target, base, tdelta);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = n;
+            return result;
+        });
+    }
+
+    /**
+     * Delete reference information
+     */
+    inline nlohmann::json del_refinfo_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int n = params["operand"];
+
+            bool success = del_refinfo(ea, n);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["operand"] = n;
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // SEGMENT REGISTER TOOLS
+    // ============================================================================
+
+    /**
+     * Get segment register value
+     */
+    inline nlohmann::json get_sreg_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int reg = params["register"];
+
+            sel_t value = get_sreg(ea, reg);
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["register"] = reg;
+            result["value"] = static_cast<int64_t>(value);
+            return result;
+        });
+    }
+
+    /**
+     * Split segment register range
+     */
+    inline nlohmann::json split_sreg_range_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int reg = params["register"];
+            sel_t value = params["value"];
+            int tag = params.contains("tag") ? static_cast<int>(params["tag"]) : SR_user;
+
+            bool success = split_sreg_range(ea, reg, value, tag);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["register"] = reg;
+            result["value"] = static_cast<int64_t>(value);
+            return result;
+        });
+    }
+
+    /**
+     * Get segment register range information
+     */
+    inline nlohmann::json get_sreg_range_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            int reg = params["register"];
+
+            sreg_range_t sreg_range;
+            bool success = get_sreg_range(&sreg_range, ea, reg);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["register"] = reg;
+
+            if (success) {
+                result["start_ea"] = static_cast<uint64_t>(sreg_range.start_ea);
+                result["end_ea"] = static_cast<uint64_t>(sreg_range.end_ea);
+                result["value"] = static_cast<int64_t>(sreg_range.val);
+                result["tag"] = sreg_range.tag;
+            }
+
+            return result;
+        });
+    }
+
+    // ============================================================================
+    // PROBLEM/WARNING TOOLS
+    // ============================================================================
+
+    /**
+     * Get problem at address
+     */
+    inline nlohmann::json get_problem_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            problist_id_t type = static_cast<problist_id_t>(params["type"]);
+            ea_t lowea = params.contains("low_address") ? static_cast<ea_t>(params["low_address"]) : 0;
+
+            ea_t prob_ea = get_problem(type, lowea);
+
+            nlohmann::json result;
+            result["type"] = static_cast<int>(type);
+            result["low_address"] = static_cast<uint64_t>(lowea);
+            result["problem_address"] = static_cast<uint64_t>(prob_ea);
+            result["found"] = (prob_ea != BADADDR);
+            return result;
+        });
+    }
+
+    /**
+     * Get problem description
+     */
+    inline nlohmann::json get_problem_desc_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            problist_id_t type = static_cast<problist_id_t>(params["type"]);
+            ea_t ea = params["address"];
+
+            qstring buf;
+            ssize_t len = get_problem_desc(&buf, type, ea);
+
+            nlohmann::json result;
+            result["type"] = static_cast<int>(type);
+            result["address"] = static_cast<uint64_t>(ea);
+            result["success"] = (len > 0);
+            if (len > 0) {
+                result["description"] = buf.c_str();
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Get problem type name
+     */
+    inline nlohmann::json get_problem_name_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            problist_id_t type = static_cast<problist_id_t>(params["type"]);
+            bool longname = params.contains("longname") ? static_cast<bool>(params["longname"]) : true;
+
+            const char *name = get_problem_name(type, longname);
+
+            nlohmann::json result;
+            result["type"] = static_cast<int>(type);
+            result["name"] = name ? name : "";
+            return result;
+        });
+    }
+
+    /**
+     * Forget (delete) problem at address
+     */
+    inline nlohmann::json forget_problem_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            problist_id_t type = static_cast<problist_id_t>(params["type"]);
+            ea_t ea = params["address"];
+
+            bool success = forget_problem(type, ea);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["type"] = static_cast<int>(type);
+            result["address"] = static_cast<uint64_t>(ea);
             return result;
         });
     }

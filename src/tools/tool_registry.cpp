@@ -2552,6 +2552,452 @@ static const std::vector<ToolDefinition> tool_definitions = {
             {"required", nlohmann::json::array({"name"})}
         },
         ida_mcp::get_struct_size_tool
+    },
+    // Operand Manipulation Tools
+    {
+        "op_offset",
+        "Convert operand to offset reference",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}},
+                {"base", {{"type", "integer"}, {"description", "Base address (optional)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::op_offset_tool
+    },
+    {
+        "op_hex",
+        "Convert operand to hexadecimal number",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::op_hex_tool
+    },
+    {
+        "op_dec",
+        "Convert operand to decimal number",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::op_dec_tool
+    },
+    {
+        "op_chr",
+        "Convert operand to character constant",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::op_chr_tool
+    },
+    {
+        "op_enum",
+        "Convert operand to enum member",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}},
+                {"enum_name", {{"type", "string"}, {"description", "Enum name"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand", "enum_name"})}
+        },
+        ida_mcp::op_enum_tool
+    },
+    {
+        "op_stroff",
+        "Convert operand to structure offset",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}},
+                {"struct_name", {{"type", "string"}, {"description", "Structure name"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand", "struct_name"})}
+        },
+        ida_mcp::op_stroff_tool
+    },
+    // Data Definition Tools
+    {
+        "create_byte",
+        "Create byte (8-bit) data at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"size", {{"type", "integer"}, {"description", "Number of bytes (optional, default 1)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::create_byte_tool
+    },
+    {
+        "create_word",
+        "Create word (16-bit) data at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"size", {{"type", "integer"}, {"description", "Number of words (optional, default 1)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::create_word_tool
+    },
+    {
+        "create_dword",
+        "Create dword (32-bit) data at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"size", {{"type", "integer"}, {"description", "Number of dwords (optional, default 1)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::create_dword_tool
+    },
+    {
+        "create_qword",
+        "Create qword (64-bit) data at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"size", {{"type", "integer"}, {"description", "Number of qwords (optional, default 1)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::create_qword_tool
+    },
+    {
+        "create_strlit",
+        "Create string literal at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"length", {{"type", "integer"}, {"description", "String length (optional, 0=auto)"}}},
+                {"string_type", {{"type", "integer"}, {"description", "String type (STRTYPE_C=0, etc.)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::create_strlit_tool
+    },
+    // Segment Operations
+    {
+        "add_segm",
+        "Create new segment",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"start_address", {{"type", "integer"}, {"description", "Start address"}}},
+                {"end_address", {{"type", "integer"}, {"description", "End address"}}},
+                {"name", {{"type", "string"}, {"description", "Segment name"}}},
+                {"class_name", {{"type", "string"}, {"description", "Segment class (optional, default DATA)"}}}
+            }},
+            {"required", nlohmann::json::array({"start_address", "end_address", "name"})}
+        },
+        ida_mcp::add_segm_tool
+    },
+    {
+        "del_segm",
+        "Delete segment at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address within segment"}}},
+                {"flags", {{"type", "integer"}, {"description", "Deletion flags (optional)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::del_segm_tool
+    },
+    {
+        "set_segm_name",
+        "Set segment name",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address within segment"}}},
+                {"name", {{"type", "string"}, {"description", "New segment name"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "name"})}
+        },
+        ida_mcp::set_segm_name_tool
+    },
+    {
+        "set_segm_class",
+        "Set segment class",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address within segment"}}},
+                {"class_name", {{"type", "string"}, {"description", "Segment class name"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "class_name"})}
+        },
+        ida_mcp::set_segm_class_tool
+    },
+    {
+        "set_segm_addressing",
+        "Set segment addressing mode (16/32/64 bit)",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address within segment"}}},
+                {"bitness", {{"type", "integer"}, {"description", "Bitness: 0=16bit, 1=32bit, 2=64bit"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "bitness"})}
+        },
+        ida_mcp::set_segm_addressing_tool
+    },
+    // Data Manipulation Tools
+    {
+        "del_items",
+        "Delete data/code at address (make undefined)",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"flags", {{"type", "integer"}, {"description", "Deletion flags (optional)"}}},
+                {"size", {{"type", "integer"}, {"description", "Number of bytes (optional, default 1)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::del_items_tool
+    },
+    {
+        "get_item_size",
+        "Get item size at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_item_size_tool
+    },
+    {
+        "next_head",
+        "Get next item head (next defined item)",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Start address"}}},
+                {"max_address", {{"type", "integer"}, {"description", "Maximum address (optional)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::next_head_tool
+    },
+    {
+        "prev_head",
+        "Get previous item head",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Start address"}}},
+                {"min_address", {{"type", "integer"}, {"description", "Minimum address (optional)"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::prev_head_tool
+    },
+    {
+        "get_flags",
+        "Get item flags at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}}
+            }},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::get_flags_tool
+    },
+    // Offset/Reference Information Tools
+    {
+        "get_offbase",
+        "Get offset base value for operand",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::get_offbase_tool
+    },
+    {
+        "is_off",
+        "Check if operand is an offset",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::is_off_tool
+    },
+    {
+        "get_refinfo",
+        "Get reference information for operand",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::get_refinfo_tool
+    },
+    {
+        "set_refinfo",
+        "Set reference information for operand",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}},
+                {"target", {{"type", "integer"}, {"description", "Target address (optional)"}}},
+                {"base", {{"type", "integer"}, {"description", "Base address (optional)"}}},
+                {"tdelta", {{"type", "integer"}, {"description", "Target delta (optional)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::set_refinfo_tool
+    },
+    {
+        "del_refinfo",
+        "Delete reference information for operand",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                {"operand", {{"type", "integer"}, {"description", "Operand number (0-based)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "operand"})}
+        },
+        ida_mcp::del_refinfo_tool
+    },
+    // Segment Register Tools
+    {
+        "get_sreg",
+        "Get segment register value at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"register", {{"type", "integer"}, {"description", "Register number"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "register"})}
+        },
+        ida_mcp::get_sreg_tool
+    },
+    {
+        "split_sreg_range",
+        "Split segment register range at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"register", {{"type", "integer"}, {"description", "Register number"}}},
+                {"value", {{"type", "integer"}, {"description", "New register value"}}},
+                {"tag", {{"type", "integer"}, {"description", "Range tag (optional, default SR_user)"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "register", "value"})}
+        },
+        ida_mcp::split_sreg_range_tool
+    },
+    {
+        "get_sreg_range",
+        "Get segment register range information",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"address", {{"type", "integer"}, {"description", "Address"}}},
+                {"register", {{"type", "integer"}, {"description", "Register number"}}}
+            }},
+            {"required", nlohmann::json::array({"address", "register"})}
+        },
+        ida_mcp::get_sreg_range_tool
+    },
+    // Problem/Warning Tools
+    {
+        "get_problem",
+        "Get problem/warning at or after address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"type", {{"type", "integer"}, {"description", "Problem type ID"}}},
+                {"low_address", {{"type", "integer"}, {"description", "Start search address (optional, default 0)"}}}
+            }},
+            {"required", nlohmann::json::array({"type"})}
+        },
+        ida_mcp::get_problem_tool
+    },
+    {
+        "get_problem_desc",
+        "Get problem description at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"type", {{"type", "integer"}, {"description", "Problem type ID"}}},
+                {"address", {{"type", "integer"}, {"description", "Address"}}}
+            }},
+            {"required", nlohmann::json::array({"type", "address"})}
+        },
+        ida_mcp::get_problem_desc_tool
+    },
+    {
+        "get_problem_name",
+        "Get problem type name",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"type", {{"type", "integer"}, {"description", "Problem type ID"}}},
+                {"longname", {{"type", "boolean"}, {"description", "Get long name (optional, default true)"}}}
+            }},
+            {"required", nlohmann::json::array({"type"})}
+        },
+        ida_mcp::get_problem_name_tool
+    },
+    {
+        "forget_problem",
+        "Delete/forget problem at address",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"type", {{"type", "integer"}, {"description", "Problem type ID"}}},
+                {"address", {{"type", "integer"}, {"description", "Address"}}}
+            }},
+            {"required", nlohmann::json::array({"type", "address"})}
+        },
+        ida_mcp::forget_problem_tool
     }
 };
 
