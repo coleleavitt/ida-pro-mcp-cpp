@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/cole/CLionProjects/idaprosdk91/include/**)",
+      "Bash(for f in include/tools/*.h)",
+      "Bash(do mv \"$f\" \"$f%.h.hpp\")",
+      "Bash(done)",
+      "Bash(cmake:*)",
+      "Bash(make)",
+      "Bash(find:*)",
+      "Read(//home/cole/CLionProjects/idaprosdk91/**)",
+      "Bash(emerge --search mingw64)",
+      "Read(//usr/x86_64-w64-mingw32/usr/**)",
+      "Bash(x86_64-w64-mingw32-g++ -print-sysroot)",
+      "Bash(chmod +x /home/cole/CLionProjects/ida-pro-mcp/build-all.sh)",
+      "Read(//usr/lib/mingw64-toolchain/**)",
+      "Read(//usr/**)",
+      "Bash(chmod +x /home/cole/CLionProjects/ida-pro-mcp/setup-mingw-deps.sh)",
+      "Bash(./build-all.sh --linux-only)",
+      "Bash(./setup-mingw-deps.sh)",
+      "Bash(x86_64-w64-mingw32-emerge -s openssl)",
+      "Bash(sudo x86_64-w64-mingw32-emerge -av dev-libs/openssl)",
+      "Bash(./build-all.sh --windows-only)",
+      "Bash(ls -la /usr/x86_64-w64-mingw32/usr/lib/lib{ssl,crypto}*)",
+      "Bash(x86_64-w64-mingw32-objdump -p build-windows/ida_mcp_plugin64.dll)",
+      "Bash(./build-all.sh --clean)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
