@@ -83,8 +83,7 @@ __pycache__/
 *.bak
 *.cache
 
-# Don't ignore .claude directory (useful for project)
-!.claude/
+.claude/
 
 # Generated scripts
 build-windows-vcpkg.sh
