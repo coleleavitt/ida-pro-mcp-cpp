@@ -4468,4 +4468,465 @@ namespace ida_mcp {
             return result;
         });
     }
+
+    // ===== Instruction Classifiers =====
+
+    inline nlohmann::json is_call_insn_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            insn_t insn;
+            if (decode_insn(&insn, ea) == 0) {
+                return {{"error", "Failed to decode instruction at address"}};
+            }
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["is_call"] = is_call_insn(insn);
+            return result;
+        });
+    }
+
+    inline nlohmann::json is_ret_insn_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+            bool strict = params.value("strict", true);
+
+            insn_t insn;
+            if (decode_insn(&insn, ea) == 0) {
+                return {{"error", "Failed to decode instruction at address"}};
+            }
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["is_ret"] = is_ret_insn(insn, strict ? 1 : 0);
+            return result;
+        });
+    }
+
+    inline nlohmann::json is_indirect_jump_insn_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            insn_t insn;
+            if (decode_insn(&insn, ea) == 0) {
+                return {{"error", "Failed to decode instruction at address"}};
+            }
+
+            nlohmann::json result;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["is_indirect_jump"] = is_indirect_jump_insn(insn);
+            return result;
+        });
+    }
+
+    // ===== Auto-Analysis Control =====
+
+    inline nlohmann::json auto_wait_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            bool success = auto_wait();
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["message"] = success ? "Auto-analysis completed" : "Auto-analysis failed or timed out";
+            return result;
+        });
+    }
+
+    inline nlohmann::json auto_make_code_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            auto_make_code(ea);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["message"] = "Scheduled for code analysis";
+            return result;
+        });
+    }
+
+    inline nlohmann::json auto_make_proc_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t ea = params["address"];
+
+            auto_make_proc(ea);
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["address"] = static_cast<uint64_t>(ea);
+            result["message"] = "Scheduled for function analysis";
+            return result;
+        });
+    }
+
+    inline nlohmann::json plan_and_wait_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t start_ea = params["start_address"];
+            ea_t end_ea = params.value("end_address", start_ea);
+            bool final_pass = params.value("final_pass", true);
+
+            int result_code = plan_and_wait(start_ea, end_ea, final_pass);
+
+            nlohmann::json result;
+            result["success"] = (result_code == 0); // PLAN_OK is typically 0
+            result["result_code"] = result_code;
+            result["start_address"] = static_cast<uint64_t>(start_ea);
+            result["end_address"] = static_cast<uint64_t>(end_ea);
+
+            // Interpret result codes
+            if (result_code == 0) {
+                result["message"] = "Analysis completed successfully";
+            } else {
+                result["message"] = "Analysis failed or was cancelled";
+            }
+
+            return result;
+        });
+    }
+
+    inline nlohmann::json auto_wait_range_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            ea_t start_ea = params["start_address"];
+            ea_t end_ea = params["end_address"];
+
+            ssize_t result_code = auto_wait_range(start_ea, end_ea);
+
+            nlohmann::json result;
+            result["success"] = (result_code >= 0);
+            result["result_code"] = result_code;
+            result["start_address"] = static_cast<uint64_t>(start_ea);
+            result["end_address"] = static_cast<uint64_t>(end_ea);
+
+            if (result_code >= 0) {
+                result["message"] = "Analysis completed for range";
+            } else {
+                result["message"] = "Analysis failed for range";
+            }
+
+            return result;
+        });
+    }
+
+    // ===== Enum Management =====
+
+    inline nlohmann::json create_enum_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("name")) {
+                return {{"error", "Missing required parameter: name"}};
+            }
+
+            std::string name = params["name"];
+
+            // Create enum type data
+            enum_type_data_t etd;
+
+            // Set base type if provided
+            if (params.contains("base_type")) {
+                std::string base_type_str = params["base_type"];
+                type_t bt = BTF_UINT64; // default
+                if (base_type_str == "uint8") bt = BTF_UINT8;
+                else if (base_type_str == "uint16") bt = BTF_UINT16;
+                else if (base_type_str == "uint32") bt = BTF_UINT32;
+                else if (base_type_str == "uint64") bt = BTF_UINT64;
+                else if (base_type_str == "int8") bt = BTF_INT8;
+                else if (base_type_str == "int16") bt = BTF_INT16;
+                else if (base_type_str == "int32") bt = BTF_INT32;
+                else if (base_type_str == "int64") bt = BTF_INT64;
+
+                etd.bte = bt;
+            }
+
+            // Create the type
+            tinfo_t tif;
+            if (!tif.create_enum(etd)) {
+                return {{"success", false}, {"error", "Failed to create enum type"}};
+            }
+
+            // Save it to the type library
+            if (tif.set_named_type(nullptr, name.c_str(), NTF_TYPE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save enum to type library"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["name"] = name;
+            result["message"] = "Enum created successfully";
+            return result;
+        });
+    }
+
+    inline nlohmann::json delete_enum_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("name")) {
+                return {{"error", "Missing required parameter: name"}};
+            }
+
+            std::string name = params["name"];
+
+            // Delete from type library
+            bool success = del_named_type(nullptr, name.c_str(), NTF_TYPE);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["name"] = name;
+            result["message"] = success ? "Enum deleted successfully" : "Failed to delete enum";
+            return result;
+        });
+    }
+
+    inline nlohmann::json add_enum_member_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("enum_name") || !params.contains("member_name") || !params.contains("value")) {
+                return {{"error", "Missing required parameters: enum_name, member_name, value"}};
+            }
+
+            std::string enum_name = params["enum_name"];
+            std::string member_name = params["member_name"];
+            uint64 value = params["value"];
+
+            // Get the enum type
+            tinfo_t tif;
+            if (!tif.get_named_type(nullptr, enum_name.c_str())) {
+                return {{"success", false}, {"error", "Enum not found"}};
+            }
+
+            // Get enum details
+            enum_type_data_t etd;
+            if (!tif.get_enum_details(&etd)) {
+                return {{"success", false}, {"error", "Failed to get enum details"}};
+            }
+
+            // Add new member
+            edm_t em;
+            em.name = member_name.c_str();
+            em.value = value;
+            etd.push_back(em);
+
+            // Update the enum
+            tinfo_t new_tif;
+            if (!new_tif.create_enum(etd)) {
+                return {{"success", false}, {"error", "Failed to update enum"}};
+            }
+
+            // Save back
+            if (new_tif.set_named_type(nullptr, enum_name.c_str(), NTF_TYPE | NTF_REPLACE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save updated enum"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["enum_name"] = enum_name;
+            result["member_name"] = member_name;
+            result["value"] = value;
+            result["message"] = "Enum member added successfully";
+            return result;
+        });
+    }
+
+    inline nlohmann::json rename_enum_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("old_name") || !params.contains("new_name")) {
+                return {{"error", "Missing required parameters: old_name, new_name"}};
+            }
+
+            std::string old_name = params["old_name"];
+            std::string new_name = params["new_name"];
+
+            // Get the enum
+            tinfo_t tif;
+            if (!tif.get_named_type(nullptr, old_name.c_str())) {
+                return {{"success", false}, {"error", "Enum not found"}};
+            }
+
+            // Delete old name
+            del_named_type(nullptr, old_name.c_str(), NTF_TYPE);
+
+            // Save with new name
+            if (tif.set_named_type(nullptr, new_name.c_str(), NTF_TYPE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save enum with new name"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["old_name"] = old_name;
+            result["new_name"] = new_name;
+            result["message"] = "Enum renamed successfully";
+            return result;
+        });
+    }
+
+    // ===== Structure Modification =====
+
+    inline nlohmann::json create_struct_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("name")) {
+                return {{"error", "Missing required parameter: name"}};
+            }
+
+            std::string name = params["name"];
+            bool is_union = params.value("is_union", false);
+
+            // Create structure type data
+            udt_type_data_t udt;
+            udt.is_union = is_union;
+            udt.taudt_bits = is_union ? TAUDT_UNALIGNED : 0;
+
+            // Create the type
+            tinfo_t tif;
+            if (!tif.create_udt(udt, is_union ? BTF_UNION : BTF_STRUCT)) {
+                return {{"success", false}, {"error", "Failed to create structure type"}};
+            }
+
+            // Save to type library
+            if (tif.set_named_type(nullptr, name.c_str(), NTF_TYPE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save structure to type library"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["name"] = name;
+            result["is_union"] = is_union;
+            result["message"] = is_union ? "Union created successfully" : "Structure created successfully";
+            return result;
+        });
+    }
+
+    inline nlohmann::json delete_struct_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("name")) {
+                return {{"error", "Missing required parameter: name"}};
+            }
+
+            std::string name = params["name"];
+
+            // Delete from type library
+            bool success = del_named_type(nullptr, name.c_str(), NTF_TYPE);
+
+            nlohmann::json result;
+            result["success"] = success;
+            result["name"] = name;
+            result["message"] = success ? "Structure deleted successfully" : "Failed to delete structure";
+            return result;
+        });
+    }
+
+    inline nlohmann::json add_struct_member_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("struct_name") || !params.contains("member_name") || !params.contains("member_type")) {
+                return {{"error", "Missing required parameters: struct_name, member_name, member_type"}};
+            }
+
+            std::string struct_name = params["struct_name"];
+            std::string member_name = params["member_name"];
+            std::string member_type_str = params["member_type"];
+            uint64 offset = params.value("offset", BADADDR);
+
+            // Get the struct type
+            tinfo_t struct_tif;
+            if (!struct_tif.get_named_type(nullptr, struct_name.c_str())) {
+                return {{"success", false}, {"error", "Structure not found"}};
+            }
+
+            // Get struct details
+            udt_type_data_t udt;
+            if (!struct_tif.get_udt_details(&udt)) {
+                return {{"success", false}, {"error", "Failed to get structure details"}};
+            }
+
+            // Parse member type
+            tinfo_t member_tif;
+            if (!parse_decl(&member_tif, nullptr, nullptr, member_type_str.c_str(), PT_TYP)) {
+                return {{"success", false}, {"error", "Failed to parse member type"}};
+            }
+
+            // Create new member
+            udm_t member;
+            member.name = member_name.c_str();
+            member.type = member_tif;
+            member.offset = (offset == BADADDR) ? udt.total_size * 8 : offset * 8; // offset in bits
+            member.size = member_tif.get_size() * 8; // size in bits
+
+            // Add member
+            udt.push_back(member);
+
+            // Update struct
+            tinfo_t new_tif;
+            if (!new_tif.create_udt(udt, udt.is_union ? BTF_UNION : BTF_STRUCT)) {
+                return {{"success", false}, {"error", "Failed to update structure"}};
+            }
+
+            // Save back
+            if (new_tif.set_named_type(nullptr, struct_name.c_str(), NTF_TYPE | NTF_REPLACE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save updated structure"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["struct_name"] = struct_name;
+            result["member_name"] = member_name;
+            result["member_type"] = member_type_str;
+            result["offset"] = member.offset / 8;
+            result["message"] = "Structure member added successfully";
+            return result;
+        });
+    }
+
+    inline nlohmann::json rename_struct_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("old_name") || !params.contains("new_name")) {
+                return {{"error", "Missing required parameters: old_name, new_name"}};
+            }
+
+            std::string old_name = params["old_name"];
+            std::string new_name = params["new_name"];
+
+            // Get the struct
+            tinfo_t tif;
+            if (!tif.get_named_type(nullptr, old_name.c_str())) {
+                return {{"success", false}, {"error", "Structure not found"}};
+            }
+
+            // Delete old name
+            del_named_type(nullptr, old_name.c_str(), NTF_TYPE);
+
+            // Save with new name
+            if (tif.set_named_type(nullptr, new_name.c_str(), NTF_TYPE) != TERR_OK) {
+                return {{"success", false}, {"error", "Failed to save structure with new name"}};
+            }
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["old_name"] = old_name;
+            result["new_name"] = new_name;
+            result["message"] = "Structure renamed successfully";
+            return result;
+        });
+    }
+
+    inline nlohmann::json get_struct_size_tool(const nlohmann::json &params) {
+        return execute_sync_wrapper([&params]() -> nlohmann::json {
+            if (!params.contains("name")) {
+                return {{"error", "Missing required parameter: name"}};
+            }
+
+            std::string name = params["name"];
+
+            // Get the struct type
+            tinfo_t tif;
+            if (!tif.get_named_type(nullptr, name.c_str())) {
+                return {{"success", false}, {"error", "Structure not found"}};
+            }
+
+            size_t size = tif.get_size();
+
+            nlohmann::json result;
+            result["success"] = true;
+            result["name"] = name;
+            result["size"] = size;
+            return result;
+        });
+    }
+
 } // namespace ida_mcp

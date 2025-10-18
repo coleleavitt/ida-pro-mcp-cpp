@@ -2321,6 +2321,237 @@ static const std::vector<ToolDefinition> tool_definitions = {
 
             return summary;
         }
+    },
+
+    // ===== Instruction Classifiers =====
+    {
+        "is_call_insn",
+        "Check if instruction is a call instruction",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Instruction address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_call_insn_tool
+    },
+    {
+        "is_ret_insn",
+        "Check if instruction is a return instruction",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"address", {{"type", "integer"}, {"description", "Instruction address"}}},
+                    {"strict", {{"type", "boolean"}, {"default", true}, {"description", "Strict checking"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_ret_insn_tool
+    },
+    {
+        "is_indirect_jump_insn",
+        "Check if instruction is an indirect jump",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Instruction address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::is_indirect_jump_insn_tool
+    },
+
+    // ===== Auto-Analysis Control =====
+    {
+        "auto_wait",
+        "Wait for auto-analysis to complete",
+        {{"type", "object"}, {"properties", nlohmann::json::object()}, {"required", nlohmann::json::array()}},
+        ida_mcp::auto_wait_tool
+    },
+    {
+        "auto_make_code",
+        "Schedule address for code analysis",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Address to analyze as code"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::auto_make_code_tool
+    },
+    {
+        "auto_make_proc",
+        "Schedule address for function analysis",
+        {
+            {"type", "object"},
+            {"properties", {{"address", {{"type", "integer"}, {"description", "Function start address"}}}}},
+            {"required", nlohmann::json::array({"address"})}
+        },
+        ida_mcp::auto_make_proc_tool
+    },
+    {
+        "plan_and_wait",
+        "Plan analysis for address range and wait for completion",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_address", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_address", {{"type", "integer"}, {"description", "End address (optional)"}}},
+                    {"final_pass", {{"type", "boolean"}, {"default", true}, {"description", "Perform final analysis pass"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_address"})}
+        },
+        ida_mcp::plan_and_wait_tool
+    },
+    {
+        "auto_wait_range",
+        "Wait for auto-analysis to complete for a specific range",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"start_address", {{"type", "integer"}, {"description", "Start address"}}},
+                    {"end_address", {{"type", "integer"}, {"description", "End address"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"start_address", "end_address"})}
+        },
+        ida_mcp::auto_wait_range_tool
+    },
+
+    // ===== Enum Management =====
+    {
+        "create_enum",
+        "Create a new enumeration type",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"name", {{"type", "string"}, {"description", "Enum name"}}},
+                    {
+                        "base_type",
+                        {
+                            {"type", "string"},
+                            {"enum", nlohmann::json::array({"uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64"})},
+                            {"default", "uint32"},
+                            {"description", "Base integer type"}
+                        }
+                    }
+                }
+            },
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::create_enum_tool
+    },
+    {
+        "delete_enum",
+        "Delete an enumeration type",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Enum name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::delete_enum_tool
+    },
+    {
+        "add_enum_member",
+        "Add a member to an enumeration",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"enum_name", {{"type", "string"}, {"description", "Enum name"}}},
+                    {"member_name", {{"type", "string"}, {"description", "Member name"}}},
+                    {"value", {{"type", "integer"}, {"description", "Member value"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"enum_name", "member_name", "value"})}
+        },
+        ida_mcp::add_enum_member_tool
+    },
+    {
+        "rename_enum",
+        "Rename an enumeration type",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"old_name", {{"type", "string"}, {"description", "Current enum name"}}},
+                    {"new_name", {{"type", "string"}, {"description", "New enum name"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"old_name", "new_name"})}
+        },
+        ida_mcp::rename_enum_tool
+    },
+
+    // ===== Structure Modification =====
+    {
+        "create_struct",
+        "Create a new structure or union type",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"name", {{"type", "string"}, {"description", "Structure name"}}},
+                    {"is_union", {{"type", "boolean"}, {"default", false}, {"description", "Create as union instead of struct"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::create_struct_tool
+    },
+    {
+        "delete_struct",
+        "Delete a structure or union type",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Structure name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::delete_struct_tool
+    },
+    {
+        "add_struct_member",
+        "Add a member to a structure",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"struct_name", {{"type", "string"}, {"description", "Structure name"}}},
+                    {"member_name", {{"type", "string"}, {"description", "Member name"}}},
+                    {"member_type", {{"type", "string"}, {"description", "Member type (e.g., 'int', 'char *')"}}},
+                    {"offset", {{"type", "integer"}, {"description", "Member offset (optional, appends if not specified)"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"struct_name", "member_name", "member_type"})}
+        },
+        ida_mcp::add_struct_member_tool
+    },
+    {
+        "rename_struct",
+        "Rename a structure or union type",
+        {
+            {"type", "object"},
+            {
+                "properties", {
+                    {"old_name", {{"type", "string"}, {"description", "Current structure name"}}},
+                    {"new_name", {{"type", "string"}, {"description", "New structure name"}}}
+                }
+            },
+            {"required", nlohmann::json::array({"old_name", "new_name"})}
+        },
+        ida_mcp::rename_struct_tool
+    },
+    {
+        "get_struct_size",
+        "Get the size of a structure",
+        {
+            {"type", "object"},
+            {"properties", {{"name", {{"type", "string"}, {"description", "Structure name"}}}}},
+            {"required", nlohmann::json::array({"name"})}
+        },
+        ida_mcp::get_struct_size_tool
     }
 };
 
