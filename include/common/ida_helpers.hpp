@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ida_compat.hpp"
+
 #define DONT_DEFINE_HEXRAYS 1
 #include <ida.hpp>
 

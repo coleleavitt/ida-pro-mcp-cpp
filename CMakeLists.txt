@@ -16,19 +16,32 @@ endif()
 # IDA SDK Configuration
 #=============================================================================
 
-# Set IDA SDK path
-set(IDASDK "$ENV{HOME}/CLionProjects/idaprosdk91" CACHE PATH "Path to IDA SDK")
+# Set IDA SDK path - platform dependent defaults
+if(WIN32)
+    set(IDASDK "C:/idasdk91" CACHE PATH "Path to IDA SDK")
+else()
+    set(IDASDK "$ENV{HOME}/CLionProjects/idaprosdk91" CACHE PATH "Path to IDA SDK")
+endif()
 
 if(NOT EXISTS "${IDASDK}")
     message(FATAL_ERROR "IDA SDK not found at: ${IDASDK}")
 endif()
 
 # Platform detection
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(__EA64__ 1)
-    set(IDAPLATFORM "x64_linux_gcc_64")
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(__EA64__ 1)
+        set(IDAPLATFORM "x64_win_vc_64")
+    else()
+        set(IDAPLATFORM "x86_win_vc_32")
+    endif()
 else()
-    set(IDAPLATFORM "x86_linux_gcc_32")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(__EA64__ 1)
+        set(IDAPLATFORM "x64_linux_gcc_64")
+    else()
+        set(IDAPLATFORM "x86_linux_gcc_32")
+    endif()
 endif()
 
 # IDA SDK include directories
@@ -43,28 +56,59 @@ else()
     message(WARNING "ida-cmake not found, using manual configuration")
 
     # Manual IDA SDK configuration
-    set(IDA_LIBRARIES
-            "${IDA_LIB_DIR}/libida.so"
-            "${IDA_LIB_DIR}/pro.a"
-    )
+    if(WIN32)
+        set(IDA_LIBRARIES
+                "${IDA_LIB_DIR}/ida.lib"
+        )
 
-    # Platform definitions
-    add_compile_definitions(
-            __LINUX__=1
-            __X64__=1
-    )
+        # Platform definitions
+        add_compile_definitions(
+                __NT__=1
+                _CRT_SECURE_NO_WARNINGS=1
+                USE_DANGEROUS_FUNCTIONS=1
+        )
 
-    if(__EA64__)
-        add_compile_definitions(__EA64__=1)
+        if(__EA64__)
+            add_compile_definitions(__EA64__=1)
+        endif()
+
+        # Windows-specific compiler flags (only for MSVC)
+        if(MSVC)
+            add_compile_options(
+                    /W3
+                    /wd4267
+                    /wd4244
+            )
+        else()
+            # MinGW cross-compile flags
+            add_compile_options(
+                    -Wno-deprecated-declarations
+            )
+        endif()
+    else()
+        set(IDA_LIBRARIES
+                "${IDA_LIB_DIR}/libida.so"
+                "${IDA_LIB_DIR}/pro.a"
+        )
+
+        # Platform definitions
+        add_compile_definitions(
+                __LINUX__=1
+                __X64__=1
+        )
+
+        if(__EA64__)
+            add_compile_definitions(__EA64__=1)
+        endif()
+
+        # Compiler flags to match IDA SDK
+        add_compile_options(
+                -fPIC
+                -fno-strict-aliasing
+                -Wno-deprecated
+                -Wno-write-strings
+        )
     endif()
-
-    # Compiler flags to match IDA SDK
-    add_compile_options(
-            -fPIC
-            -fno-strict-aliasing
-            -Wno-deprecated
-            -Wno-write-strings
-    )
 endif()
 
 #=============================================================================
@@ -89,7 +133,17 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 # OpenSSL
+# For cross-compilation, you may need to specify OPENSSL_ROOT_DIR
 find_package(OpenSSL REQUIRED)
+
+# Cross-compilation message
+if(CMAKE_CROSSCOMPILING)
+    message(STATUS "Cross-compiling for ${CMAKE_SYSTEM_NAME}")
+    if(NOT OPENSSL_FOUND)
+        message(FATAL_ERROR "OpenSSL not found for cross-compilation target. "
+                "Please install OpenSSL for MinGW or specify -DOPENSSL_ROOT_DIR=<path>")
+    endif()
+endif()
 
 #=============================================================================
 # Plugin Configuration
@@ -114,53 +168,103 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # Link libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${IDA_LIBRARIES}
-        httplib::httplib
-        nlohmann_json::nlohmann_json
-        OpenSSL::SSL
-        OpenSSL::Crypto
-        pthread
-        dl
-)
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            ${IDA_LIBRARIES}
+            httplib::httplib
+            nlohmann_json::nlohmann_json
+            OpenSSL::SSL
+            OpenSSL::Crypto
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            ${IDA_LIBRARIES}
+            httplib::httplib
+            nlohmann_json::nlohmann_json
+            OpenSSL::SSL
+            OpenSSL::Crypto
+            pthread
+            dl
+    )
+endif()
 
 # Set output properties for IDA plugin
-set_target_properties(${PROJECT_NAME} PROPERTIES
-        PREFIX ""
-        SUFFIX ".so"
-        OUTPUT_NAME "ida_mcp_plugin"
-)
-
-# Plugin extension based on platform
-if(__EA64__)
+if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
-            SUFFIX "64.so"
+            PREFIX ""
+            OUTPUT_NAME "ida_mcp_plugin"
     )
+
+    # Plugin extension based on platform
+    if(__EA64__)
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+                SUFFIX "64.dll"
+        )
+    else()
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+                SUFFIX ".dll"
+        )
+    endif()
+else()
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+            PREFIX ""
+            SUFFIX ".so"
+            OUTPUT_NAME "ida_mcp_plugin"
+    )
+
+    # Plugin extension based on platform
+    if(__EA64__)
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+                SUFFIX "64.so"
+        )
+    endif()
 endif()
 
 #=============================================================================
 # Installation
 #=============================================================================
 
-# Install to user IDA plugins directory (~/.idapro/plugins)
-install(TARGETS ${PROJECT_NAME}
-        LIBRARY DESTINATION "$ENV{HOME}/.idapro/plugins"
-        OPTIONAL
-)
-
-# Install to specific IDA installation directory (if it exists)
-set(IDA_SPECIFIC_DIR "$ENV{HOME}/Downloads/Software/IDAPro/ida-pro-9.1/plugins")
-if(EXISTS "${IDA_SPECIFIC_DIR}")
+if(WIN32)
+    # Install to user IDA plugins directory on Windows
     install(TARGETS ${PROJECT_NAME}
-            LIBRARY DESTINATION "${IDA_SPECIFIC_DIR}"
+            RUNTIME DESTINATION "$ENV{APPDATA}/Hex-Rays/IDA Pro/plugins"
+            OPTIONAL
     )
+
+    # Install to specific IDA installation directory (if it exists)
+    set(IDA_SPECIFIC_DIR "C:/Program Files/IDA Pro 9.1/plugins")
+    if(EXISTS "${IDA_SPECIFIC_DIR}")
+        install(TARGETS ${PROJECT_NAME}
+                RUNTIME DESTINATION "${IDA_SPECIFIC_DIR}"
+        )
+    endif()
+else()
+    # Install to user IDA plugins directory (~/.idapro/plugins)
+    install(TARGETS ${PROJECT_NAME}
+            LIBRARY DESTINATION "$ENV{HOME}/.idapro/plugins"
+            OPTIONAL
+    )
+
+    # Install to specific IDA installation directory (if it exists)
+    set(IDA_SPECIFIC_DIR "$ENV{HOME}/Downloads/Software/IDAPro/ida-pro-9.1/plugins")
+    if(EXISTS "${IDA_SPECIFIC_DIR}")
+        install(TARGETS ${PROJECT_NAME}
+                LIBRARY DESTINATION "${IDA_SPECIFIC_DIR}"
+        )
+    endif()
 endif()
 
 # Install to custom IDA plugins directory (optional)
 if(DEFINED IDA_INSTALL_DIR)
-    install(TARGETS ${PROJECT_NAME}
-            LIBRARY DESTINATION "${IDA_INSTALL_DIR}/plugins"
-    )
+    if(WIN32)
+        install(TARGETS ${PROJECT_NAME}
+                RUNTIME DESTINATION "${IDA_INSTALL_DIR}/plugins"
+        )
+    else()
+        install(TARGETS ${PROJECT_NAME}
+                LIBRARY DESTINATION "${IDA_INSTALL_DIR}/plugins"
+        )
+    endif()
 endif()
 
 #=============================================================================
