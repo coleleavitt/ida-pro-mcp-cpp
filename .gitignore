@@ -1,28 +1,94 @@
 # Build directories
 build/
+build-*/
 cmake-build-*/
+install/
 
-# CMake files
+# CMake generated files
 CMakeCache.txt
 CMakeFiles/
-*.cmake
+cmake_install.cmake
+CPackConfig.cmake
+CPackSourceConfig.cmake
 Makefile
+*.make
+*.ninja
+.ninja_deps
+.ninja_log
+_deps/
+
+# But keep our custom CMake files
+!cmake/
+!cmake/*.cmake
+!CMakeLists.txt
 
 # Compiled Object files
 *.o
 *.obj
+*.lo
+*.slo
+
+# Compiled shared libraries
 *.so
 *.so.*
+*.dll
+*.dylib
+
+# Compiled static libraries
 *.a
 *.lib
+*.lai
+*.la
 
-# IDE specific files (CLion)
+# Windows specific
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.dll.a
+
+# IDE specific files
 .idea/
 *.iml
+.vscode/
+*.swp
+*.swo
+*.code-workspace
+
+# CLion
+cmake-build-*/
 
 # OS specific files
 .DS_Store
 .directory
 *~
+Thumbs.db
+desktop.ini
 
-.claude
+# vcpkg (if installed locally)
+vcpkg/
+vcpkg_installed/
+
+# Python (if any scripts are added)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Don't ignore .claude directory (useful for project)
+!.claude/
+
+# Generated scripts
+build-windows-vcpkg.sh
+
+# Backup files
+*.orig
+*~
